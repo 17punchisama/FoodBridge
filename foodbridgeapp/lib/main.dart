@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'screens/temporary_screen.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 void main() {
   runApp(const MyApp());
@@ -13,6 +14,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Flutter Demo',
       theme: ThemeData(
+        textTheme: GoogleFonts.ibmPlexSansThaiTextTheme(),
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
       home: const TemporaryScreen(),  // ใช้หน้าแรกชั่วคราว

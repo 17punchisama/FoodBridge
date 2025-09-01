@@ -6,9 +6,25 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: const Center(
-        child: Text('This is home page'),
+    return Scaffold(
+      body: Stack(
+        children: [
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                stops: [0.0, 0.2, 1.0], // 20% gradient, 80% สีล่าง
+                colors: [
+                  Color(0x33038263), // เขียวเข้ม
+                  Color(0xFFF4F3F3), // ขาวอมเทา
+                  Color(0xFFF4F3F3), // ขาวอมเทา
+                ],
+              ),
+            ),
+          ),
+          const Center(child: Text('This is home page')),
+        ],
       ),
       bottomNavigationBar: const NavBar(),
     );
