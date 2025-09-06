@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:foodbridgeapp/screens/login_page.dart';
-import 'login_page.dart';
 import 'register_page.dart';
 import 'home_page.dart';
 import 'post_page.dart';

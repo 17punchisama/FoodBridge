@@ -7,7 +7,7 @@ class PostPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      body: const Center(child: Text('This is post page')),
+      body: Center(child: Text('This is post page')),
       bottomNavigationBar: NavBar(),
     );
   }
