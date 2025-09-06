@@ -7,7 +7,7 @@ class NavBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(height: 60, color: Colors.grey[300],
     child: const Center(
-      child: const Text('nav bar najaaa'),
+      child: Text('nav bar najaaa'),
     ));
   }
 }
