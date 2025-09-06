@@ -42,7 +42,7 @@ class TemporaryScreen extends StatelessWidget {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const HomePage()),
+                  MaterialPageRoute(builder: (_) => HomePage()),
                 );
               },
               child: const Text('Home'),
