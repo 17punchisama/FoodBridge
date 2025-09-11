@@ -18,6 +18,6 @@ class MyApp extends StatelessWidget {
       ),
       home: const TemporaryScreen(), // ใช้หน้าแรกชั่วคราว
     );
-    //test
+    //te
   }
 }
