@@ -40,15 +40,13 @@ coverage/
 /android/.gradle/
 android/local.properties
 
-# iOS
-ios/Pods/
-ios/Runner.xcworkspace/
-ios/Flutter/Flutter.framework
-ios/Flutter/Flutter.podspec
-ios/.symlinks/
-ios/Flutter/App.framework
-ios/Flutter/Flutter.podspec
+.metadata
+linux/
+macos/
+windows/
+ios/
 
 # Others
 app.*.symbols
 app.*.map.json
+
