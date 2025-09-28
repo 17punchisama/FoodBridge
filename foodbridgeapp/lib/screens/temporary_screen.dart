@@ -3,6 +3,8 @@ import 'package:foodbridgeapp/screens/login_page.dart';
 import 'register_page.dart';
 import 'home_page.dart';
 import 'post_page.dart';
+import 'edit_profile_page.dart';
+import 'profile_page.dart';
 
 class TemporaryScreen extends StatelessWidget {
   const TemporaryScreen({super.key});
@@ -54,6 +56,24 @@ class TemporaryScreen extends StatelessWidget {
                 );
               },
               child: const Text('Post'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const EditProfilePage()),
+                );
+              },
+              child: const Text('Edit Profile'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ProfilePage()),
+                );
+              },
+              child: const Text('Profile'),
             ),
           ],
         ),
