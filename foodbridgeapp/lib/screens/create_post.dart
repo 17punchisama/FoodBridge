@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'map_picker_page.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geocoding/geocoding.dart';
 //import 'package:intl/intl.dart'
 class CreatePostPage extends StatefulWidget {
   const CreatePostPage({Key? key}) : super(key: key);
@@ -14,22 +17,41 @@ class _CreatePostPageState extends State<CreatePostPage> {
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _detailsController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
+
   DateTime _selectedDate = DateTime.now();
   String _fmtTime(TimeOfDay t) =>
     '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
   String _fmtDate(DateTime d) =>
     '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-  // add intl: ^0.19.0 to pubspec.yaml, and import 'package:intl/intl.dart';
   // final _thai = DateFormat('d MMM yyyy', 'th'); // e.g., 28 ก.ย. 2025
   bool _wantToDistribute = true;
   int _price = 0;
-  int _quantity = 5;
-  String _selectedCategory = 'ของคาว';
+  int _quantity = 1;
+  String _selectedCategory = 'ของคาว'; //wait for api+++++++++++++++++++++++++
   TimeOfDay _openTime = const TimeOfDay(hour: 12, minute: 0);
   TimeOfDay _closeTime = const TimeOfDay(hour: 16, minute: 0);
+  String _province = '';   // e.g., กรุงเทพมหานคร
+  String _postal = '';     // e.g., 10400
+  LatLng? _latLng;         // selected location
+  
+  String formatThaiAddress(Placemark p) {
+  // Safely join components commonly used in TH addresses
+  final parts = [
+    p.street,               // บ้าน/เลขที่ ถนน (sometimes full line)
+    p.subLocality,          // แขวง/ตำบล
+    p.locality,             // เขต/อำเภอ
+  ].where((e) => (e != null && e.trim().isNotEmpty)).toList();
+  // Fallback if street is empty: use name + thoroughfare if available (optional)
+  if (parts.isEmpty) return '${p.name ?? ''} ${p.thoroughfare ?? ''}'.trim();
+  return parts.join(' ');
+  }
 
-    
-
+  @override
+  void initState() {
+    super.initState();
+    _pricecontroller.text = _price.toString(); // set initial text
+    _quantitycontroller.text = _quantity.toString(); // set initial text
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -136,6 +158,11 @@ class _CreatePostPageState extends State<CreatePostPage> {
                     onChanged: (value) {
                       setState(() {
                         _wantToDistribute = value;
+                     
+                        if (_wantToDistribute) {
+                          _price = 0;
+                          _pricecontroller.text = '0';
+                        }
                       });
                     },
                     activeColor: Colors.green[600],
@@ -189,7 +216,10 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                   textAlign: TextAlign.center,
                                   onChanged: (value) {
                                     setState(() {
+                                      _pricecontroller.text = _price.toString();
                                       _price = int.tryParse(value) ?? 0;
+                                      if (_price > 0) _wantToDistribute = false;
+                                      if (_price == 0) _wantToDistribute = true;
                                     });
                                   },
                                   decoration: const InputDecoration(
@@ -257,6 +287,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                   onChanged: (value) {
                                     setState(() {
                                       _quantity = int.tryParse(value) ?? 0;
+                                      _quantitycontroller.text = _quantity.toString();
                                     });
                                   },
                                   decoration: const InputDecoration(
@@ -323,13 +354,14 @@ class _CreatePostPageState extends State<CreatePostPage> {
                     ),
                   ),
                   const SizedBox(height: 12),
+                  //wait for api+++++++++++++++++++++++++
                   Row(
                     children: [
                       _buildCategoryButton('ของคาว'),
                       const SizedBox(width: 8),
                       _buildCategoryButton('ของหวาน'),
                       const SizedBox(width: 8),
-                      _buildCategoryButton('ดีกลด'),
+                      _buildCategoryButton('ผักสด'),
                     ],
                   ),
                 ],
@@ -348,7 +380,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ---- Date picker row ----
+                  // Date picker row + Time pickers
                   Row(
                     children: [
                       Icon(Icons.date_range, color: Colors.green[600], size: 20),
@@ -357,7 +389,11 @@ class _CreatePostPageState extends State<CreatePostPage> {
                         'วันที่',
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                       ),
-                      const SizedBox(width: 12),
+                    ],
+                  ),
+                  const SizedBox(width: 12),
+                  Row(
+                    children: [
                       GestureDetector(
                         onTap: () async {
                           final picked = await showDatePicker(
@@ -385,9 +421,9 @@ class _CreatePostPageState extends State<CreatePostPage> {
                           ),
                         ),
                       ),
-                    ],
+                      ],
+                      
                   ),
-  
                   Row(
                     children: [
                       Icon(
@@ -468,21 +504,40 @@ class _CreatePostPageState extends State<CreatePostPage> {
                 children: [
                   Row(
                     children: [
-                      Icon(
-                        Icons.location_on,
-                        color: Colors.red[600],
-                        size: 20,
-                      ),
+                      Icon(Icons.location_on, color: Colors.red[600], size: 20),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: TextField(
-                          controller: _addressController,
-                          decoration: const InputDecoration(
-                            hintText: 'บ้าน/เลขที่ อาคาร ชั้น\nถนน แขวง เขต',
-                            hintStyle: TextStyle(color: Colors.grey),
-                            border: InputBorder.none,
+                        child: GestureDetector(
+                          onTap: () async {
+                            final result = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => MapPickerPage(
+                                  initial: _latLng ?? const LatLng(13.7563, 100.5018),
+                                ),
+                              ),
+                            );
+
+                            if (result != null) {
+                              setState(() {
+                                _latLng = result.latLng;
+                                _addressController.text = formatThaiAddress(result.placemark);
+                                _province = result.placemark.administrativeArea ?? '';
+                                _postal   = result.placemark.postalCode ?? '';
+                              });
+                            }
+                          },
+                          child: AbsorbPointer(
+                            child: TextField(
+                              controller: _addressController,
+                              decoration: const InputDecoration(
+                                hintText: 'แตะเพื่อเลือกตำแหน่งจากแผนที่\nบ้าน/เลขที่ ถนน แขวง เขต',
+                                hintStyle: TextStyle(color: Colors.grey),
+                                border: InputBorder.none,
+                              ),
+                              maxLines: 2,
+                            ),
                           ),
-                          maxLines: 2,
                         ),
                       ),
                     ],
@@ -492,33 +547,27 @@ class _CreatePostPageState extends State<CreatePostPage> {
                     children: [
                       Expanded(
                         child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           decoration: BoxDecoration(
                             color: Colors.grey[100],
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Text(
-                            'กรุงเทพมหานคร',
-                            style: TextStyle(fontSize: 14),
+                          child: Text(
+                            _province.isEmpty ? 'จังหวัด' : _province, // e.g., กรุงเทพมหานคร
+                            style: const TextStyle(fontSize: 14),
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
                           color: Colors.grey[100],
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Text(
-                          '10400',
-                          style: TextStyle(fontSize: 14),
+                        child: Text(
+                          _postal.isEmpty ? 'รหัสไปรษณีย์' : _postal, // e.g., 10400
+                          style: const TextStyle(fontSize: 14),
                         ),
                       ),
                     ],
