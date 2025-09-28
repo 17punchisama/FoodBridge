@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:foodbridgeapp/screens/post_page.dart';
+import 'package:foodbridgeapp/screens/create_post.dart';
 
 class ForYouPage extends StatelessWidget {
   final List<Map<String, String>> items = [
@@ -441,7 +442,7 @@ class ForYouPage extends StatelessWidget {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => PostPage()),
+            MaterialPageRoute(builder: (context) => CreatePostPage()),
           );
         },
         backgroundColor: const Color(0xFFF58319),
