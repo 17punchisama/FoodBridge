@@ -373,10 +373,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
             // Opening hours
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -385,9 +381,15 @@ class _CreatePostPageState extends State<CreatePostPage> {
                     children: [
                       Icon(Icons.date_range, color: Colors.green[600], size: 20),
                       const SizedBox(width: 8),
-                      const Text(
-                        'วันที่',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                      const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 4.0), 
+                        child: Text(
+                          'วันที่',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -410,8 +412,9 @@ class _CreatePostPageState extends State<CreatePostPage> {
                           }
                         },
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           decoration: BoxDecoration(
+                            color: Colors.white,
                             border: Border.all(color: Colors.grey.shade400),
                             borderRadius: BorderRadius.circular(8),
                           ),
@@ -422,21 +425,19 @@ class _CreatePostPageState extends State<CreatePostPage> {
                         ),
                       ),
                       ],
-                      
                   ),
                   Row(
                     children: [
-                      Icon(
-                        Icons.access_time,
-                        color: Colors.green[600],
-                        size: 20,
-                      ),
+                      Icon(Icons.access_time,color: Colors.green[600],size: 20,),
                       const SizedBox(width: 8),
-                      const Text(
-                        'เวลาเปิด-ปิด',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
+                      const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 4.0), 
+                        child: Text(
+                          'เวลาเปิด - ปิด',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ],
@@ -456,11 +457,19 @@ class _CreatePostPageState extends State<CreatePostPage> {
                             });
                           }
                         },
-                        child: Text(
-                          '${_openTime.hour.toString().padLeft(2, '0')}:${_openTime.minute.toString().padLeft(2, '0')}',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            border: Border.all(color: Colors.grey.shade400),   
+                            borderRadius: BorderRadius.circular(8),   
+                          ),
+                          child: Text(
+                            '${_openTime.hour.toString().padLeft(2, '0')}:${_openTime.minute.toString().padLeft(2, '0')}',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ),
                       ),
@@ -477,11 +486,18 @@ class _CreatePostPageState extends State<CreatePostPage> {
                             });
                           }
                         },
-                        child: Text(
-                          '${_closeTime.hour.toString().padLeft(2, '0')}:${_closeTime.minute.toString().padLeft(2, '0')}',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade400),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '${_closeTime.hour.toString().padLeft(2, '0')}:${_closeTime.minute.toString().padLeft(2, '0')}',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ),
                       ),
@@ -709,6 +725,9 @@ class _CreatePostPageState extends State<CreatePostPage> {
         backgroundColor: Colors.green,
       ),
     );
+    Future.delayed(const Duration(seconds: 1), () {
+    Navigator.pop(context);
+    });
   }
   
   @override
