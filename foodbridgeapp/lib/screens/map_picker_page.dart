@@ -25,12 +25,46 @@ class _MapPickerPageState extends State<MapPickerPage> {
   );
   bool _confirming = false;
 
+  final TextEditingController _searchController = TextEditingController();
+  bool _searching = false;
+
+
   @override
   void initState() {
     super.initState();
     if (widget.initial != null) {
       _picked = widget.initial!;
       _marker = Marker(markerId: const MarkerId('picked'), position: _picked);
+    }
+  }
+
+  Future<void> _searchPlace() async {
+    final query = _searchController.text.trim();
+    if (query.isEmpty) return;
+    setState(() => _searching = true);
+    try {
+      final locations = await locationFromAddress(query, localeIdentifier: 'th_TH');
+      if (locations.isNotEmpty) {
+        final loc = locations.first;
+        final pos = LatLng(loc.latitude, loc.longitude);
+        setState(() {
+          _picked = pos;
+          _marker = Marker(markerId: const MarkerId('picked'), position: pos);
+        });
+        await _controller?.animateCamera(CameraUpdate.newLatLngZoom(pos, 15));
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ไม่พบสถานที่ที่ค้นหา')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('เกิดข้อผิดพลาดในการค้นหา: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _searching = false);
     }
   }
 
@@ -59,18 +93,57 @@ class _MapPickerPageState extends State<MapPickerPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('เลือกตำแหน่งบนแผนที่')),
-      body: GoogleMap(
-        initialCameraPosition: CameraPosition(target: _picked, zoom: 15),
-        onMapCreated: (c) => _controller = c,
-        onTap: (pos) {
-          setState(() {
-            _picked = pos;
-            _marker = Marker(markerId: const MarkerId('picked'), position: pos);
-          });
-        },
-        markers: {_marker},
-        myLocationButtonEnabled: true,
-        myLocationEnabled: false, // enable if you add location permission flow
+      body: Stack(
+        children: [
+          GoogleMap(
+            initialCameraPosition: CameraPosition(target: _picked, zoom: 15),
+            onMapCreated: (c) => _controller = c,
+            onTap: (pos) {
+              setState(() {
+                _picked = pos;
+                _marker = Marker(markerId: const MarkerId('picked'), position: pos);
+              });
+            },
+            markers: {_marker},
+            myLocationButtonEnabled: true,
+            myLocationEnabled: false,
+          ),
+          // Search box at top
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: const InputDecoration(
+                          hintText: 'ค้นหาสถานที่...',
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12),
+                          border: InputBorder.none,
+                        ),
+                        onSubmitted: (_) => _searchPlace(),
+                      ),
+                    ),
+                    IconButton(
+                      icon: _searching
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.search),
+                      onPressed: _searching ? null : _searchPlace,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _confirming ? null : _confirm,
