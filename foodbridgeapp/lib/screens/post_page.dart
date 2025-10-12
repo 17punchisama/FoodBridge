@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 // Enum to track user verification and reservation status
 enum UserStatus {
@@ -17,10 +18,13 @@ class PostPage extends StatefulWidget {
 class _PostPageState extends State<PostPage> {
   // Simulate user status - change this to test different popups
   UserStatus userStatus = UserStatus.verifiedNoReservation;
+  final double latitude = 13.7563;  // from API
+  final double longitude = 100.5018; // from API
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBody: true, // To allow bottom button to float over content
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -32,7 +36,7 @@ class _PostPageState extends State<PostPage> {
                   width: double.infinity,
                   decoration: const BoxDecoration(
                     image: DecorationImage(
-                      image: NetworkImage('https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-ElcGnVI9ixNxK4kVZ1QKsZ84eRJsyO.png'),
+                      image: AssetImage('assets/images/savory_img.png'),
                       fit: BoxFit.cover,
                     ),
                   ),
@@ -50,6 +54,7 @@ class _PostPageState extends State<PostPage> {
                     ),
                   ),
                 ),
+                // Top navigation
                 SafeArea(
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
@@ -67,13 +72,6 @@ class _PostPageState extends State<PostPage> {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            const Text(
-                              'post page (owner)',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                              ),
-                            ),
                           ],
                         ),
                         Row(
@@ -84,7 +82,7 @@ class _PostPageState extends State<PostPage> {
                                 vertical: 8,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.green[600],
+                                color: Color(0xFF038263),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: const Text(
@@ -110,7 +108,7 @@ class _PostPageState extends State<PostPage> {
                 ),
               ],
             ),
-            
+            // Content section
             Container(
               color: Colors.grey[100],
               child: Column(
@@ -147,12 +145,12 @@ class _PostPageState extends State<PostPage> {
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
+                                  const Spacer(),
                                   const Text(
                                     'จำนวน',
                                     style: TextStyle(
                                       fontSize: 16,
-                                      color: Colors.grey,
+                                      color: Color(0xFFF58319),
                                     ),
                                   ),
                                   const SizedBox(width: 8),
@@ -162,7 +160,7 @@ class _PostPageState extends State<PostPage> {
                                       vertical: 4,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: Colors.green,
+                                      color: Color(0xFF038263),
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: const Text(
@@ -174,28 +172,18 @@ class _PostPageState extends State<PostPage> {
                                     ),
                                   ),
                                   const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.green,
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: const Text(
-                                      'กี',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                  const Text(
+                                    'ที่',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Color(0xFFF58319),
                                     ),
                                   ),
                                 ],
                               ),
                               const SizedBox(height: 8),
                               const Text(
-                                'แจกข้าวมันไก่ 30 กี',
+                                'แจกข้าวมันไก่ 30 ที่',
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
@@ -242,12 +230,12 @@ class _PostPageState extends State<PostPage> {
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: Colors.green[50],
+                                  color: Color(0xFF038263).withOpacity(0.1),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
                                   Icons.access_time,
-                                  color: Colors.green[600],
+                                  color: Color(0xFF038263),
                                   size: 20,
                                 ),
                               ),
@@ -320,12 +308,12 @@ class _PostPageState extends State<PostPage> {
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: Colors.green[50],
+                                  color: Color(0xFF038263).withOpacity(0.1),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
                                   Icons.phone,
-                                  color: Colors.green[600],
+                                  color: Color(0xFF038263),
                                   size: 20,
                                 ),
                               ),
@@ -354,42 +342,27 @@ class _PostPageState extends State<PostPage> {
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Stack(
-                        children: [
-                          Container(
-                            width: double.infinity,
-                            height: double.infinity,
-                            color: Colors.grey[300],
-                            child: const Center(
-                              child: Text(
-                                'Map View\n(Integrate with Google Maps)',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ),
+                        child: GoogleMap(
+                          initialCameraPosition: CameraPosition(
+                            target: LatLng(latitude, longitude), // 👈 from backend
+                            zoom: 15,
                           ),
-                          const Positioned(
-                            top: 80,
-                            left: 0,
-                            right: 0,
-                            child: Center(
-                              child: Icon(
-                                Icons.location_on,
-                                color: Colors.red,
-                                size: 40,
-                              ),
+                          markers: {
+                            Marker(
+                              markerId: const MarkerId('location'),
+                              position: LatLng(latitude, longitude),
                             ),
-                          ),
-                        ],
+                          },
+                          myLocationButtonEnabled: false,
+                          zoomControlsEnabled: false,
+                          scrollGesturesEnabled: false, // optional: make it static preview
+                          rotateGesturesEnabled: false,
+                          tiltGesturesEnabled: false,
+                        ),
                       ),
-                    ),
                   ),
-                  
+
                   const SizedBox(height: 20),
-                  
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 16),
                     padding: const EdgeInsets.all(16),
@@ -425,57 +398,34 @@ class _PostPageState extends State<PostPage> {
       
       // <CHANGE> Updated bottom button to show reservation confirmation
       bottomNavigationBar: Container(
+        color: Colors.transparent,
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.2),
-              spreadRadius: 1,
-              blurRadius: 4,
-              offset: const Offset(0, -2),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'อยู่ในรอคาก ได้กินละกลองกำหนด',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey,
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: () {
-                  _handleReservationAction(context);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: userStatus == UserStatus.verifiedWithReservation
-                      ? Colors.red[600]
-                      : Colors.green[600],
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(25),
-                  ),
+        child: SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton(
+              onPressed: () {
+                _handleReservationAction(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: userStatus == UserStatus.verifiedWithReservation
+                    ? Colors.red[600]
+                    : Color(0xFF038263),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(25),
                 ),
-                child: Text(
-                  userStatus == UserStatus.verifiedWithReservation
-                      ? 'ยกเลิกการจอง'
-                      : 'จองสิทธิ์',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
+              ),
+              child: Text(
+                userStatus == UserStatus.verifiedWithReservation
+                    ? 'ยกเลิกการจอง'
+                    : 'จองสิทธิ์',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
-          ],
         ),
       ),
     );
@@ -555,7 +505,7 @@ class _PostPageState extends State<PostPage> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('ยืนยันตัวตนสำเร็จ!'),
-                          backgroundColor: Colors.green,
+                          backgroundColor: Color(0xFF038263),
                         ),
                       );
                     },
@@ -656,7 +606,7 @@ class _PostPageState extends State<PostPage> {
                           'ยกเลิก',
                           style: TextStyle(
                             color: Colors.blue[600],
-                            fontSize: 16,
+                            fontSize: 16, 
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -673,7 +623,7 @@ class _PostPageState extends State<PostPage> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('จองสิทธิ์สำเร็จ!'),
-                              backgroundColor: Colors.green,
+                              backgroundColor: Color(0xFF038263),
                             ),
                           );
                         },
