@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 // Enum to track user verification and reservation status
@@ -18,8 +19,77 @@ class PostPage extends StatefulWidget {
 class _PostPageState extends State<PostPage> {
   // Simulate user status - change this to test different popups
   UserStatus userStatus = UserStatus.verifiedNoReservation;
-  final double latitude = 13.7563;  // from API
-  final double longitude = 100.5018; // from API
+  double latitude = 13.7563;  // initial value
+  double longitude = 100.5018; // initial value
+  double? _distanceKm;
+  String? _district;
+  String? _province;
+
+
+  Future<void> _calculateDistance(LatLng destination, String district, String province) async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    // Check location services are enabled
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      // Location services are not enabled
+      if (mounted) {
+        setState(() {
+          _distanceKm = null;
+          _district = district;
+          _province = province;
+        });
+      }
+      return;
+    }
+    // Check permission
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        if (mounted) {
+          setState(() {
+            _distanceKm = null;
+            _district = district;
+            _province = province;
+          });
+        }
+        return;
+      }
+    }
+    // get current position
+    Position position = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
+
+    double distanceInMeters = Geolocator.distanceBetween(
+      position.latitude,
+      position.longitude,
+      destination.latitude,
+      destination.longitude,
+    );
+
+    setState(() {
+      _distanceKm = distanceInMeters / 1000; // convert to km
+      _district = district;
+      _province = province;
+      print('Dest: ${destination.latitude}, ${destination.longitude}');
+      print('Position: ${position.latitude}, ${position.longitude}');
+      print('Distance: $_distanceKm km');
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Example: backend gives these
+    final backendLatLng = LatLng(13.7279, 100.5241); // from backend
+    final backendDistrict = 'เขตลาดกระบัง';
+    final backendProvince = 'กรุงเทพฯ';
+
+    _calculateDistance(backendLatLng, backendDistrict, backendProvince);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -138,7 +208,7 @@ class _PostPageState extends State<PostPage> {
                               Row(
                                 children: [
                                   const Text(
-                                    'ฟรี',
+                                    'ฟรี', // backend
                                     style: TextStyle(
                                       color: Colors.red,
                                       fontSize: 24,
@@ -164,7 +234,7 @@ class _PostPageState extends State<PostPage> {
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: const Text(
-                                      '10',
+                                      '10', // backend
                                       style: TextStyle(
                                         color: Colors.white,
                                         fontWeight: FontWeight.bold,
@@ -182,31 +252,47 @@ class _PostPageState extends State<PostPage> {
                                 ],
                               ),
                               const SizedBox(height: 8),
-                              const Text(
-                                'แจกข้าวมันไก่ 30 ที่',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const Text(
-                                '408/138 อาคารพหลโยธินเพลส ชั้น 32',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey,
-                                ),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: const [
+                                        Text(
+                                          'แจกข้าวมันไก่ 30 ที่', // backend
+                                          style: TextStyle(
+                                            fontSize: 32,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        SizedBox(height: 4),
+                                        Text(
+                                          '408/138 อาคารพหลโยธินเพลส ชั้น 32', // backend
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                      alignment: Alignment.centerRight,
+                                      height: 40, 
+                                      child: Text(
+                                        'Close', // backend text
+                                        textAlign: TextAlign.right,
+                                        style: TextStyle(
+                                          color: Colors.red,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                  ),
+                                ],
                               ),
                             ],
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () {},
-                          child: const Text(
-                            'Close',
-                            style: TextStyle(
-                              color: Colors.red,
-                              fontSize: 16,
-                            ),
                           ),
                         ),
                       ],
@@ -241,7 +327,7 @@ class _PostPageState extends State<PostPage> {
                               ),
                               const SizedBox(width: 12),
                               const Text(
-                                'ปิดอยู่ จะเปิดอีกที 9.00 - 12.00',
+                                '9.00 - 12.00',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w500,
@@ -275,16 +361,20 @@ class _PostPageState extends State<PostPage> {
                               const SizedBox(width: 12),
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
-                                children: const [
+                                children: [
                                   Text(
-                                    'ระยะทาง 10.5 กม',
+                                    _distanceKm != null
+                                      ? 'ระยะทาง ${_distanceKm!.toStringAsFixed(1)} กม'
+                                      : 'กำลังคำนวณระยะทาง...',
                                     style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w500,
                                     ),
                                   ),
                                   Text(
-                                    'เขตลาดกระบัง, กรุงเทพฯ',
+                                    _district != null && _province != null
+                                      ? '$_district, $_province'
+                                      : 'กำลังดึงข้อมูลที่ตั้ง...',
                                     style: TextStyle(
                                       fontSize: 14,
                                       color: Colors.grey,
@@ -344,7 +434,7 @@ class _PostPageState extends State<PostPage> {
                       borderRadius: BorderRadius.circular(12),
                         child: GoogleMap(
                           initialCameraPosition: CameraPosition(
-                            target: LatLng(latitude, longitude), // 👈 from backend
+                            target: LatLng(latitude, longitude), // from backend
                             zoom: 15,
                           ),
                           markers: {
@@ -355,7 +445,7 @@ class _PostPageState extends State<PostPage> {
                           },
                           myLocationButtonEnabled: false,
                           zoomControlsEnabled: false,
-                          scrollGesturesEnabled: false, // optional: make it static preview
+                          scrollGesturesEnabled: false, // static preview
                           rotateGesturesEnabled: false,
                           tiltGesturesEnabled: false,
                         ),
