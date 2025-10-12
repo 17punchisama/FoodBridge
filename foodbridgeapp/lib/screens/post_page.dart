@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 // Enum to track user verification and reservation status
 enum UserStatus {
@@ -17,10 +19,82 @@ class PostPage extends StatefulWidget {
 class _PostPageState extends State<PostPage> {
   // Simulate user status - change this to test different popups
   UserStatus userStatus = UserStatus.verifiedNoReservation;
+  double latitude = 13.7563;  // initial value
+  double longitude = 100.5018; // initial value
+  double? _distanceKm;
+  String? _district;
+  String? _province;
+
+
+  Future<void> _calculateDistance(LatLng destination, String district, String province) async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    // Check location services are enabled
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      // Location services are not enabled
+      if (mounted) {
+        setState(() {
+          _distanceKm = null;
+          _district = district;
+          _province = province;
+        });
+      }
+      return;
+    }
+    // Check permission
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        if (mounted) {
+          setState(() {
+            _distanceKm = null;
+            _district = district;
+            _province = province;
+          });
+        }
+        return;
+      }
+    }
+    // get current position
+    Position position = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
+
+    double distanceInMeters = Geolocator.distanceBetween(
+      position.latitude,
+      position.longitude,
+      destination.latitude,
+      destination.longitude,
+    );
+
+    setState(() {
+      _distanceKm = distanceInMeters / 1000; // convert to km
+      _district = district;
+      _province = province;
+      print('Dest: ${destination.latitude}, ${destination.longitude}');
+      print('Position: ${position.latitude}, ${position.longitude}');
+      print('Distance: $_distanceKm km');
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Example: backend gives these
+    final backendLatLng = LatLng(13.7279, 100.5241); // from backend
+    final backendDistrict = 'เขตลาดกระบัง';
+    final backendProvince = 'กรุงเทพฯ';
+
+    _calculateDistance(backendLatLng, backendDistrict, backendProvince);
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBody: true, // To allow bottom button to float over content
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -32,7 +106,7 @@ class _PostPageState extends State<PostPage> {
                   width: double.infinity,
                   decoration: const BoxDecoration(
                     image: DecorationImage(
-                      image: NetworkImage('https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-ElcGnVI9ixNxK4kVZ1QKsZ84eRJsyO.png'),
+                      image: AssetImage('assets/images/savory_img.png'),
                       fit: BoxFit.cover,
                     ),
                   ),
@@ -50,6 +124,7 @@ class _PostPageState extends State<PostPage> {
                     ),
                   ),
                 ),
+                // Top navigation
                 SafeArea(
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
@@ -67,13 +142,6 @@ class _PostPageState extends State<PostPage> {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            const Text(
-                              'post page (owner)',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                              ),
-                            ),
                           ],
                         ),
                         Row(
@@ -84,7 +152,7 @@ class _PostPageState extends State<PostPage> {
                                 vertical: 8,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.green[600],
+                                color: Color(0xFF038263),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: const Text(
@@ -110,7 +178,7 @@ class _PostPageState extends State<PostPage> {
                 ),
               ],
             ),
-            
+            // Content section
             Container(
               color: Colors.grey[100],
               child: Column(
@@ -140,19 +208,19 @@ class _PostPageState extends State<PostPage> {
                               Row(
                                 children: [
                                   const Text(
-                                    'ฟรี',
+                                    'ฟรี', // backend
                                     style: TextStyle(
                                       color: Colors.red,
                                       fontSize: 24,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
+                                  const Spacer(),
                                   const Text(
                                     'จำนวน',
                                     style: TextStyle(
                                       fontSize: 16,
-                                      color: Colors.grey,
+                                      color: Color(0xFFF58319),
                                     ),
                                   ),
                                   const SizedBox(width: 8),
@@ -162,11 +230,11 @@ class _PostPageState extends State<PostPage> {
                                       vertical: 4,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: Colors.green,
+                                      color: Color(0xFF038263),
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: const Text(
-                                      '10',
+                                      '10', // backend
                                       style: TextStyle(
                                         color: Colors.white,
                                         fontWeight: FontWeight.bold,
@@ -174,51 +242,57 @@ class _PostPageState extends State<PostPage> {
                                     ),
                                   ),
                                   const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.green,
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: const Text(
-                                      'กี',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                  const Text(
+                                    'ที่',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Color(0xFFF58319),
                                     ),
                                   ),
                                 ],
                               ),
                               const SizedBox(height: 8),
-                              const Text(
-                                'แจกข้าวมันไก่ 30 กี',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const Text(
-                                '408/138 อาคารพหลโยธินเพลส ชั้น 32',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey,
-                                ),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: const [
+                                        Text(
+                                          'แจกข้าวมันไก่ 30 ที่', // backend
+                                          style: TextStyle(
+                                            fontSize: 32,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        SizedBox(height: 4),
+                                        Text(
+                                          '408/138 อาคารพหลโยธินเพลส ชั้น 32', // backend
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                      alignment: Alignment.centerRight,
+                                      height: 40, 
+                                      child: Text(
+                                        'Close', // backend text
+                                        textAlign: TextAlign.right,
+                                        style: TextStyle(
+                                          color: Colors.red,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                  ),
+                                ],
                               ),
                             ],
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () {},
-                          child: const Text(
-                            'Close',
-                            style: TextStyle(
-                              color: Colors.red,
-                              fontSize: 16,
-                            ),
                           ),
                         ),
                       ],
@@ -242,18 +316,18 @@ class _PostPageState extends State<PostPage> {
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: Colors.green[50],
+                                  color: Color(0xFF038263).withOpacity(0.1),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
                                   Icons.access_time,
-                                  color: Colors.green[600],
+                                  color: Color(0xFF038263),
                                   size: 20,
                                 ),
                               ),
                               const SizedBox(width: 12),
                               const Text(
-                                'ปิดอยู่ จะเปิดอีกที 9.00 - 12.00',
+                                '9.00 - 12.00',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w500,
@@ -287,16 +361,20 @@ class _PostPageState extends State<PostPage> {
                               const SizedBox(width: 12),
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
-                                children: const [
+                                children: [
                                   Text(
-                                    'ระยะทาง 10.5 กม',
+                                    _distanceKm != null
+                                      ? 'ระยะทาง ${_distanceKm!.toStringAsFixed(1)} กม'
+                                      : 'กำลังคำนวณระยะทาง...',
                                     style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w500,
                                     ),
                                   ),
                                   Text(
-                                    'เขตลาดกระบัง, กรุงเทพฯ',
+                                    _district != null && _province != null
+                                      ? '$_district, $_province'
+                                      : 'กำลังดึงข้อมูลที่ตั้ง...',
                                     style: TextStyle(
                                       fontSize: 14,
                                       color: Colors.grey,
@@ -320,12 +398,12 @@ class _PostPageState extends State<PostPage> {
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: Colors.green[50],
+                                  color: Color(0xFF038263).withOpacity(0.1),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
                                   Icons.phone,
-                                  color: Colors.green[600],
+                                  color: Color(0xFF038263),
                                   size: 20,
                                 ),
                               ),
@@ -354,42 +432,27 @@ class _PostPageState extends State<PostPage> {
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Stack(
-                        children: [
-                          Container(
-                            width: double.infinity,
-                            height: double.infinity,
-                            color: Colors.grey[300],
-                            child: const Center(
-                              child: Text(
-                                'Map View\n(Integrate with Google Maps)',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ),
+                        child: GoogleMap(
+                          initialCameraPosition: CameraPosition(
+                            target: LatLng(latitude, longitude), // from backend
+                            zoom: 15,
                           ),
-                          const Positioned(
-                            top: 80,
-                            left: 0,
-                            right: 0,
-                            child: Center(
-                              child: Icon(
-                                Icons.location_on,
-                                color: Colors.red,
-                                size: 40,
-                              ),
+                          markers: {
+                            Marker(
+                              markerId: const MarkerId('location'),
+                              position: LatLng(latitude, longitude),
                             ),
-                          ),
-                        ],
+                          },
+                          myLocationButtonEnabled: false,
+                          zoomControlsEnabled: false,
+                          scrollGesturesEnabled: false, // static preview
+                          rotateGesturesEnabled: false,
+                          tiltGesturesEnabled: false,
+                        ),
                       ),
-                    ),
                   ),
-                  
+
                   const SizedBox(height: 20),
-                  
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 16),
                     padding: const EdgeInsets.all(16),
@@ -425,57 +488,34 @@ class _PostPageState extends State<PostPage> {
       
       // <CHANGE> Updated bottom button to show reservation confirmation
       bottomNavigationBar: Container(
+        color: Colors.transparent,
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.2),
-              spreadRadius: 1,
-              blurRadius: 4,
-              offset: const Offset(0, -2),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'อยู่ในรอคาก ได้กินละกลองกำหนด',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey,
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: () {
-                  _handleReservationAction(context);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: userStatus == UserStatus.verifiedWithReservation
-                      ? Colors.red[600]
-                      : Colors.green[600],
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(25),
-                  ),
+        child: SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton(
+              onPressed: () {
+                _handleReservationAction(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: userStatus == UserStatus.verifiedWithReservation
+                    ? Colors.red[600]
+                    : Color(0xFF038263),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(25),
                 ),
-                child: Text(
-                  userStatus == UserStatus.verifiedWithReservation
-                      ? 'ยกเลิกการจอง'
-                      : 'จองสิทธิ์',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
+              ),
+              child: Text(
+                userStatus == UserStatus.verifiedWithReservation
+                    ? 'ยกเลิกการจอง'
+                    : 'จองสิทธิ์',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
-          ],
         ),
       ),
     );
@@ -555,7 +595,7 @@ class _PostPageState extends State<PostPage> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('ยืนยันตัวตนสำเร็จ!'),
-                          backgroundColor: Colors.green,
+                          backgroundColor: Color(0xFF038263),
                         ),
                       );
                     },
@@ -656,7 +696,7 @@ class _PostPageState extends State<PostPage> {
                           'ยกเลิก',
                           style: TextStyle(
                             color: Colors.blue[600],
-                            fontSize: 16,
+                            fontSize: 16, 
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -673,7 +713,7 @@ class _PostPageState extends State<PostPage> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('จองสิทธิ์สำเร็จ!'),
-                              backgroundColor: Colors.green,
+                              backgroundColor: Color(0xFF038263),
                             ),
                           );
                         },
