@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:async';
@@ -5,8 +8,31 @@ import 'edit_profile_page.dart';
 import 'post_page.dart';
 import 'nav_bar.dart';
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
+
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  final _storage = const FlutterSecureStorage();
+
+  Future<Map<String, dynamic>?> fetchUser() async {
+    final token = await _storage.read(key: 'token');
+    if (token == null) return null;
+
+    final response = await http.get(
+      Uri.parse('https://foodbridge1.onrender.com/me'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      return null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -15,332 +41,217 @@ class ProfilePage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 244, 243, 243),
-      // appBar: AppBar(
-      //   backgroundColor: Colors.transparent,
-      //   automaticallyImplyLeading: false,
-      //   elevation: 0,
-      //   title: Row(
-      //     crossAxisAlignment: CrossAxisAlignment.center,
-      //     children: [
-      //       CircleAvatar(
-      //         radius: 20,
-      //         backgroundImage: NetworkImage('https://i.pravatar.cc/150?img=3'),
-      //       ),
-      //       SizedBox(width: 8),
-      //       Text(
-      //         'Username',
-      //         style: TextStyle(
-      //           fontSize: 22,
-      //           fontWeight: FontWeight.bold,
-      //           color: Colors.black,
-      //         ),
-      //       ),
-      //     ],
-      //   ),
-      //   actions: [
-      //     IconButton(
-      //       icon: Icon(Icons.share),
-      //       onPressed: () {
-      //         showDialog(
-      //           context: context,
-      //           builder: (_) => AlertDialog(
-      //             title: Text('Share Profile'),
-      //             content: Column(
-      //               mainAxisSize: MainAxisSize.min,
-      //               children: [
-      //                 Row(
-      //                   mainAxisAlignment: MainAxisAlignment.spaceAround,
-      //                   children: [
-      //                     Icon(Icons.facebook, color: Colors.blue),
-      //                     Icon(Icons.telegram, color: Colors.blueAccent),
-      //                     Icon(Icons.facebook, color: Colors.green),
-      //                   ],
-      //                 ),
-      //                 SizedBox(height: 12),
-      //                 TextField(
-      //                   decoration: InputDecoration(
-      //                     labelText: 'Copy link',
-      //                     border: OutlineInputBorder(),
-      //                   ),
-      //                   readOnly: true,
-      //                   controller: TextEditingController(
-      //                     text: "https://example.com/profile",
-      //                   ),
-      //                 ),
-      //               ],
-      //             ),
-      //             actions: [
-      //               TextButton(
-      //                 onPressed: () => Navigator.pop(context),
-      //                 child: Text('Close'),
-      //               ),
-      //             ],
-      //           ),
-      //         );
-      //       },
-      //     ),
-      //     IconButton(
-      //       icon: Icon(Icons.settings),
-      //       onPressed: () {
-      //         Navigator.push(
-      //           context,
-      //           MaterialPageRoute(
-      //             builder: (context) => const EditProfilePage(),
-      //           ),
-      //         );
-      //       },
-      //     ),
-      //   ],
-      // ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // header
-            Row(
-              mainAxisAlignment: MainAxisAlignment
-                  .spaceBetween, // username left, buttons right
-              crossAxisAlignment: CrossAxisAlignment.center,
+      body: FutureBuilder<Map<String, dynamic>?>(
+        future: fetchUser(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final user = snapshot.data!;
+          final fullName = user['full_name'] ?? 'Username';
+          final province = user['province'] ?? 'Bangkok, Thailand';
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Header
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    SvgPicture.asset(
-                      'assets/icons/no_profile.svg',
-                      width: 70,
-                      height: 70,
+                    Row(
+                      children: [
+                        SvgPicture.asset(
+                          'assets/icons/no_profile.svg',
+                          width: 70,
+                          height: 70,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          fullName,
+                          style: const TextStyle(
+                              fontSize: 22, fontWeight: FontWeight.bold),
+                        ),
+                      ],
                     ),
-                    SizedBox(width: 8),
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.share),
+                          iconSize: 30,
+                          onPressed: () {},
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.settings),
+                          iconSize: 30,
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const EditProfilePage()),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    const Icon(Icons.location_on, color: Colors.red, size: 28),
+                    const SizedBox(width: 4),
                     Text(
-                      'Username',
-                      style: TextStyle(
-                        fontSize: 22,
+                      province,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        color: Color.fromARGB(255, 3, 130, 99),
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ],
                 ),
-                Row(
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.share),
-                      iconSize: 30,
-                      onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (_) => AlertDialog(
-                            title: Text('Share Profile'),
-                            content: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceAround,
-                                  children: [
-                                    Icon(Icons.facebook, color: Colors.blue, size: 30,),
-                                    Icon(
-                                      Icons.telegram,
-                                      color: Colors.blueAccent,
-                                      size: 30,
-                                    ),
-                                    Icon(Icons.facebook, color: Colors.green, size: 30,),
-                                  ],
-                                ),
-                                SizedBox(height: 12),
-                                TextField(
-                                  decoration: InputDecoration(
-                                    labelText: 'Copy link',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  readOnly: true,
-                                  controller: TextEditingController(
-                                    text: "https://example.com/profile",
-                                  ),
-                                ),
-                              ],
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: Text('Close'),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.settings),
-                      iconSize: 30,
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const EditProfilePage(),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            SizedBox(height: 24),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Icon(Icons.location_on, color: Colors.red),
-                SizedBox(width: 4),
-                Text(
-                  'Bangkok, Thailand',
-                  style: TextStyle(
-                    fontSize: 20,
-                    color: Color.fromARGB(255, 3, 130, 99),
-                    fontWeight: FontWeight.bold,
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color.fromARGB(50, 245, 131, 25),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                ),
-              ],
-            ),
-            SizedBox(height: 16),
-            Container(
-              width: double.infinity,
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Color.fromARGB(50, 245, 131, 25),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'จำนวนสิทธิ์ที่เหลือ',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 20,
-                        ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: const [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'จำนวนสิทธิ์ที่เหลือ',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 20),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'วันที่ 18 กันยายน 2568',
+                            style: TextStyle(
+                                color: Color.fromARGB(255, 237, 20, 41),
+                                fontSize: 16),
+                          ),
+                        ],
                       ),
-                      SizedBox(height: 4),
-                      Text(
-                        'วันที่ 18 กันยายน 2568',
-                        style: TextStyle(
-                          color: const Color.fromARGB(255, 237, 20, 41),
-                          fontSize: 16,
+                      Center(
+                        child: Text(
+                          '1/2',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 20),
                         ),
                       ),
                     ],
                   ),
-                  Center(
-                    child: Text(
-                      '1/2',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 20,
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'รายการของฉัน',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    ),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const PostPage()),
+                        );
+                      },
+                      child: Text(
+                        'ดูทั้งหมด',
+                        style: TextStyle(fontSize: 16, color: Colors.black),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 12),
+                // horizontal posts
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Color.fromARGB(80, 3, 130, 99),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.3),
+                        spreadRadius: 2,
+                        blurRadius: 6,
+                        offset: Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: SizedBox(
+                    height: 150,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: List.generate(
+                        5,
+                        (index) => PreviewPostBox(
+                          status: index % 2 == 0 ? "ได้คิวแล้ว" : "ได้รับอาหารแล้ว",
+                        ),
                       ),
                     ),
                   ),
-                ],
-              ),
-            ),
-            SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'รายการของฉัน',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const PostPage()),
-                    );
-                  },
-                  child: Text(
-                    'ดูทั้งหมด',
-                    style: TextStyle(fontSize: 16, color: Colors.black),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 12),
-            // horizontal posts
-            Container(
-              width: double.infinity,
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Color.fromARGB(80, 3, 130, 99),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.grey.withOpacity(0.3),
-                    spreadRadius: 2,
-                    blurRadius: 6,
-                    offset: Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: SizedBox(
-                height: 150,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: List.generate(
-                    5,
-                    (index) => PreviewPostBox(
-                      status: index % 2 == 0 ? "ได้คิวแล้ว" : "ได้รับอาหารแล้ว",
+                SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'ความสำเร็จ',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                     ),
-                  ),
+                  ],
                 ),
-              ),
-            ),
-            SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'ความสำเร็จ',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                SizedBox(height: 12),
+                SizedBox(
+                  height: 200,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SuccessBox(
+                        width: successBoxWidth,
+                        name: 'ประหยัดไป',
+                        iconPath: 'assets/icons/coin.svg',
+                        number: 1,
+                        unit: 'บาท',
+                      ),
+                      SizedBox(width: 12),
+                      SuccessBox(
+                        width: successBoxWidth,
+                        name: 'แบ่งบันไป',
+                        iconPath: 'assets/icons/kindness_green.svg',
+                        number: 2,
+                        unit: 'ครั้ง',
+                      ),
+                      SizedBox(width: 12),
+                      SuccessBox(
+                        width: successBoxWidth,
+                        name: 'รับน้ำใจ',
+                        iconPath: 'assets/icons/kindness_orange.svg',
+                        number: 3,
+                        unit: 'ครั้ง',
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-            SizedBox(height: 12),
-            SizedBox(
-              height: 200,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  SuccessBox(
-                    width: successBoxWidth,
-                    name: 'ประหยัดไป',
-                    iconPath: 'assets/icons/coin.svg',
-                    number: 1,
-                    unit: 'บาท',
-                  ),
-                  SizedBox(width: 12),
-                  SuccessBox(
-                    width: successBoxWidth,
-                    name: 'แบ่งบันไป',
-                    iconPath: 'assets/icons/kindness_green.svg',
-                    number: 2,
-                    unit: 'ครั้ง',
-                  ),
-                  SizedBox(width: 12),
-                  SuccessBox(
-                    width: successBoxWidth,
-                    name: 'รับน้ำใจ',
-                    iconPath: 'assets/icons/kindness_orange.svg',
-                    number: 3,
-                    unit: 'ครั้ง',
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       ),
       bottomNavigationBar: NavBar(),
     );
