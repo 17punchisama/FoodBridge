@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 // Enum to track user verification and reservation status
 enum UserStatus {
@@ -18,12 +19,25 @@ class PostPage extends StatefulWidget {
 
 class _PostPageState extends State<PostPage> {
   // Simulate user status - change this to test different popups
+  String userId = "USER001"; // from backend or auth system
+  String? reservationId;
   UserStatus userStatus = UserStatus.verifiedNoReservation;
+  // location data
   double latitude = 13.7563;  // initial value
   double longitude = 100.5018; // initial value
   double? _distanceKm;
   String? _district;
   String? _province;
+  // post data
+  final String status = 'เปิดจอง'; // e.g. "ปิดแล้ว"
+  final String freeLabel = 'ฟรี';
+  final int availableCount = 10;
+  final String menuName = 'แจกข้าวมันไก่ 30 ที่';
+  final String address = '408/138 อาคารพหลโยธินเพลส ชั้น 32';
+  final String openStatus = 'Open'; // or "Open"
+  final String openTime = '9.00 - 12.00';
+  final String contactPhone = '088-888-8888';
+  final String imagePath = 'assets/images/savory_img.png';
 
 
   Future<void> _calculateDistance(LatLng destination, String district, String province) async {
@@ -101,15 +115,11 @@ class _PostPageState extends State<PostPage> {
             // Header with food image
             Stack(
               children: [
-                Container(
-                  height: 280,
+                 Image.asset(
+                  imagePath, // backend image path
                   width: double.infinity,
-                  decoration: const BoxDecoration(
-                    image: DecorationImage(
-                      image: AssetImage('assets/images/savory_img.png'),
-                      fit: BoxFit.cover,
-                    ),
-                  ),
+                  height: 280,
+                  fit: BoxFit.cover,
                 ),
                 Container(
                   height: 100,
@@ -155,8 +165,8 @@ class _PostPageState extends State<PostPage> {
                                 color: Color(0xFF038263),
                                 borderRadius: BorderRadius.circular(20),
                               ),
-                              child: const Text(
-                                'เปิดจอง',
+                              child: Text(
+                                status, // backend
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 14,
@@ -207,8 +217,8 @@ class _PostPageState extends State<PostPage> {
                             children: [
                               Row(
                                 children: [
-                                  const Text(
-                                    'ฟรี', // backend
+                                  Text(
+                                    freeLabel, // backend
                                     style: TextStyle(
                                       color: Colors.red,
                                       fontSize: 24,
@@ -233,8 +243,8 @@ class _PostPageState extends State<PostPage> {
                                       color: Color(0xFF038263),
                                       borderRadius: BorderRadius.circular(4),
                                     ),
-                                    child: const Text(
-                                      '10', // backend
+                                    child: Text(
+                                      '$availableCount', // backend
                                       style: TextStyle(
                                         color: Colors.white,
                                         fontWeight: FontWeight.bold,
@@ -258,9 +268,9 @@ class _PostPageState extends State<PostPage> {
                                   Expanded(
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: const [
+                                      children: [
                                         Text(
-                                          'แจกข้าวมันไก่ 30 ที่', // backend
+                                          menuName, // backend
                                           style: TextStyle(
                                             fontSize: 32,
                                             fontWeight: FontWeight.bold,
@@ -268,7 +278,7 @@ class _PostPageState extends State<PostPage> {
                                         ),
                                         SizedBox(height: 4),
                                         Text(
-                                          '408/138 อาคารพหลโยธินเพลส ชั้น 32', // backend
+                                          address, // backend
                                           style: TextStyle(
                                             fontSize: 14,
                                             color: Colors.grey,
@@ -281,10 +291,12 @@ class _PostPageState extends State<PostPage> {
                                       alignment: Alignment.centerRight,
                                       height: 40, 
                                       child: Text(
-                                        'Close', // backend text
+                                        openStatus, // backend text
                                         textAlign: TextAlign.right,
                                         style: TextStyle(
-                                          color: Colors.red,
+                                          color: openStatus == 'Open'
+                                          ? Colors.green
+                                          : Colors.red,
                                           fontSize: 16,
                                           fontWeight: FontWeight.bold,
                                         ),
@@ -326,8 +338,8 @@ class _PostPageState extends State<PostPage> {
                                 ),
                               ),
                               const SizedBox(width: 12),
-                              const Text(
-                                '9.00 - 12.00',
+                              Text(
+                                'เวลา $openTime', // backend
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w500,
@@ -408,8 +420,8 @@ class _PostPageState extends State<PostPage> {
                                 ),
                               ),
                               const SizedBox(width: 12),
-                              const Text(
-                                '088-888-8888',
+                              Text(
+                                contactPhone, // backend
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w500,
@@ -453,26 +465,51 @@ class _PostPageState extends State<PostPage> {
                   ),
 
                   const SizedBox(height: 20),
+                  // extra Details section
                   Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'รายละเอียด',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.1),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
                         ),
-                        Icon(
-                          Icons.keyboard_arrow_down,
-                          color: Colors.grey[600],
+                      ],
+                    ),
+                    child: ExpansionTile(
+                      shape: const RoundedRectangleBorder(), // remove default divider
+                      tilePadding: EdgeInsets.zero,
+                      title: const Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'รายละเอียด',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      trailing: Icon(
+                        Icons.keyboard_arrow_down,
+                        color: Colors.grey[600],
+                      ),
+                      childrenPadding: const EdgeInsets.only(top: 12),
+                      children: const [
+                        Text(
+                          'แจกข้าวมันไก่สำหรับผู้ต้องการความช่วยเหลือ 30 ที่ '
+                          'โดยสามารถมารับได้ตั้งแต่เวลา 9.00 - 12.00 ที่อาคารพหลโยธินเพลส ชั้น 32.\n'
+                          'กรุณาโทรติดต่อ 088-888-8888 หากต้องการสอบถามเพิ่มเติม.',
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: Colors.black87,
+                            height: 1.4,
+                          ),
                         ),
                       ],
                     ),
@@ -490,35 +527,112 @@ class _PostPageState extends State<PostPage> {
       bottomNavigationBar: Container(
         color: Colors.transparent,
         padding: const EdgeInsets.all(16),
-        child: SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-              onPressed: () {
-                _handleReservationAction(context);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: userStatus == UserStatus.verifiedWithReservation
-                    ? Colors.red[600]
-                    : Color(0xFF038263),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(25),
+        child: userStatus == UserStatus.verifiedWithReservation
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  //  Show QR code when reserved
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.1),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        const Text(
+                          'แสดง QR CODE เพื่อยืนยันการจอง',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        // QR Code
+                        QrImageView(
+                          data: reservationId ?? '', // reservation ID
+                          version: QrVersions.auto,
+                          size: 150,
+                          backgroundColor: Colors.white,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'รหัสจอง: $reservationId',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Cancel button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        _handleReservationAction(context);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red[600],
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(25),
+                        ),
+                      ),
+                      child: const Text(
+                        'ยกเลิกการจอง',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: () {
+                    _handleReservationAction(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF038263),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(25),
+                    ),
+                  ),
+                  child: const Text(
+                    'จองสิทธิ์',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
-              child: Text(
-                userStatus == UserStatus.verifiedWithReservation
-                    ? 'ยกเลิกการจอง'
-                    : 'จองสิทธิ์',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-        ),
       ),
     );
+  }
+  // <CHANGE> Added method to generate unique reservation ID
+   void _generateReservationId() {
+    if (reservationId != null) return; // already generated
+
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    reservationId = "$userId-$timestamp"; // e.g. USER001-1718203562000
+    print("Generated reservation ID: $reservationId");
   }
 
   // <CHANGE> Added method to handle reservation actions based on user status
@@ -662,11 +776,11 @@ class _PostPageState extends State<PostPage> {
                           fontWeight: FontWeight.w500,
                         ),
                       ),
-                      const TextSpan(
-                        text: 'แจกข้าวมันไก่ 30 กี ',
+                      TextSpan(
+                        text: menuName,
                       ),
                       TextSpan(
-                        text: 'ใช่หรือไม่',
+                        text: ' ใช่หรือไม่',
                         style: TextStyle(
                           color: Colors.orange[700],
                         ),
@@ -684,7 +798,7 @@ class _PostPageState extends State<PostPage> {
                         },
                         style: OutlinedButton.styleFrom(
                           side: BorderSide(
-                            color: Colors.blue[600]!,
+                            color: Colors.grey,
                             width: 2,
                           ),
                           shape: RoundedRectangleBorder(
@@ -695,7 +809,7 @@ class _PostPageState extends State<PostPage> {
                         child: Text(
                           'ยกเลิก',
                           style: TextStyle(
-                            color: Colors.blue[600],
+                            color: Colors.grey,
                             fontSize: 16, 
                             fontWeight: FontWeight.w600,
                           ),
@@ -707,6 +821,7 @@ class _PostPageState extends State<PostPage> {
                       child: ElevatedButton(
                         onPressed: () {
                           Navigator.pop(context);
+                          _generateReservationId(); // Generate reservation ID
                           setState(() {
                             userStatus = UserStatus.verifiedWithReservation;
                           });
@@ -783,11 +898,11 @@ class _PostPageState extends State<PostPage> {
                           fontWeight: FontWeight.w500,
                         ),
                       ),
-                      const TextSpan(
-                        text: 'แจกข้าวมันไก่ 30 กี ',
+                      TextSpan(
+                        text: menuName,
                       ),
                       TextSpan(
-                        text: 'ใช่หรือไม่',
+                        text: ' ใช่หรือไม่',
                         style: TextStyle(
                           color: Colors.orange[700],
                         ),
