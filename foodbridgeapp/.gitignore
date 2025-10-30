@@ -41,10 +41,10 @@ coverage/
 android/local.properties
 
 .metadata
-linux/
-macos/
-windows/
-ios/
+/linux/
+/macos/
+/windows/
+/ios/
 
 # Others
 app.*.symbols
