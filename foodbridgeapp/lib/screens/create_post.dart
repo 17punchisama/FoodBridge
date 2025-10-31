@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'map_picker_page.dart';
+import 'dart:convert';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:http/http.dart' as http;
 //import 'package:intl/intl.dart'
+
 class CreatePostPage extends StatefulWidget {
-  const CreatePostPage({Key? key}) : super(key: key);
+  const CreatePostPage({super.key});
 
   @override
   State<CreatePostPage> createState() => _CreatePostPageState();
@@ -196,13 +200,13 @@ class _CreatePostPageState extends State<CreatePostPage> {
                               fontWeight: FontWeight.w500,
                             ),
                           ),
-                          Text(
-                            '*ช่องนี้จะแสดงให้ในหน้า อื่นเห็น',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.orange[600],
-                            ),
-                          ),
+                          // Text(
+                          //   '*ช่องนี้จะแสดงให้ในหน้า อื่นเห็น',
+                          //   style: TextStyle(
+                          //     fontSize: 12,
+                          //     color: Colors.orange[600],
+                          //   ),
+                          // ),
                         ],
                       ),
                       Row(
@@ -214,15 +218,15 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                   controller: _pricecontroller,
                                   keyboardType: TextInputType.number,
                                   textAlign: TextAlign.center,
-                                  onChanged: (value) {
+                                  onSubmitted: (value) {
                                     setState(() {
-                                      _pricecontroller.text = _price.toString();
                                       _price = int.tryParse(value) ?? 0;
-                                      if (_price > 0) _wantToDistribute = false;
-                                      if (_price == 0) _wantToDistribute = true;
+                                      _pricecontroller.text = _price.toString();
+                                      _wantToDistribute = _price == 0;
                                     });
                                   },
                                   decoration: const InputDecoration(
+                                    labelText: 'บาท',
                                     border: OutlineInputBorder(),
                                     isDense: true,
                                     contentPadding: EdgeInsets.symmetric(vertical: 6),
@@ -247,7 +251,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
                               GestureDetector(
                                 onTap: () {
                                   setState(() {
-                                    if (_price > 0) _price-=5;
+                                    _price-=5;
+                                    if (_price < 0) _price = 0;
                                     _pricecontroller.text = _price.toString();
                                   });
                                 },
@@ -291,6 +296,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                     });
                                   },
                                   decoration: const InputDecoration(
+                                    labelText: 'ชิ้น',
                                     border: OutlineInputBorder(),
                                     isDense: true,
                                     contentPadding: EdgeInsets.symmetric(vertical: 6),
@@ -704,32 +710,133 @@ class _CreatePostPageState extends State<CreatePostPage> {
     );
   }
   
-  void _createPost() {
-    // Handle post creation logic here
-    print('Creating post...');
-    print('Description: ${_descriptionController.text}');
-    print('Want to distribute: $_wantToDistribute');
-    print('Price: $_price');
-    print('Quantity: $_quantity');
-    print('Category: $_selectedCategory');
-    print('Open time: ${_openTime.format(context)}');
-    print('Close time: ${_closeTime.format(context)}');
-    print('Address: ${_addressController.text}');
-    print('Details: ${_detailsController.text}');
-    print('Phone: ${_phoneController.text}');
-    
-    // Show success message or navigate back
+  void _createPost() async {
+    final storage = const FlutterSecureStorage();
+    final url = Uri.parse('https://foodbridge1.onrender.com/posts'); 
+    final token = await storage.read(key: 'token');
+
+    if (token == null) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('โพสต์สำเร็จแล้ว!'),
-        backgroundColor: Colors.green,
+        content: Text('กรุณาเข้าสู่ระบบก่อนโพสต์'),
+        backgroundColor: Colors.red,
+      ),
+      );
+      return;
+    }
+
+    if (_latLng == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('กรุณาเลือกตำแหน่งบนแผนที่ก่อนโพสต์'),
+        backgroundColor: Colors.orange,
       ),
     );
-    Future.delayed(const Duration(seconds: 1), () {
-    Navigator.pop(context);
-    });
+    return;
+    }
+
+    // Convert TimeOfDay to ISO 8601 (RFC3339)
+    DateTime now = DateTime.now();
+    final openTimeDate = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      _openTime.hour,
+      _openTime.minute,
+    ).toUtc();
+
+    final closeTimeDate = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      _closeTime.hour,
+      _closeTime.minute,
+    ).toUtc();
+
+    // debug print 
+    print('Description       : ${_descriptionController.text}');
+    print('Want to distribute: $_wantToDistribute');
+    print('Price             : $_price');
+    print('Quantity          : $_quantity');
+    print('Category          : $_selectedCategory');
+    print('Open time         : ${openTimeDate.toIso8601String()}');
+    print('Close time        : ${closeTimeDate.toIso8601String()}');
+    print('Address           : ${_addressController.text}');
+    print('Details           : ${_detailsController.text}');
+    print('Phone             : ${_phoneController.text}');
+    print('LatLng            : ${_latLng != null ? "${_latLng!.latitude}, ${_latLng!.longitude}" : "not selected"}');
+    
+    // Build request body
+    final body = {
+    "title": _descriptionController.text,
+    "description": _detailsController.text,
+    "is_giveaway": _wantToDistribute,
+    "price": _price,
+    "quantity": _quantity,
+    "category": _selectedCategory,
+    "open_time": openTimeDate.toIso8601String(),
+    "close_time": closeTimeDate.toIso8601String(),
+    "address": _addressController.text,
+    "phone": _phoneController.text,
+    "lat": _latLng!.latitude,     
+    "lng": _latLng!.longitude,    
+    "categories": [_selectedCategory], // only one selected
+  };
+
+  try {
+    final response = await http.post(
+      url,
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $token",
+      },
+      body: json.encode(body),
+    );
+
+    print("Sending: ${json.encode(body)}");
+    print("Response: ${response.statusCode} ${response.body}");
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('โพสต์สำเร็จแล้ว!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Future.delayed(const Duration(seconds: 1), () {
+        Navigator.pop(context);
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('ไม่สามารถโพสต์ได้ (${response.statusCode})'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      print("Response body: ${response.body}");
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ: $e'),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
-  
+}
+
+  //   // Show success message or navigate back
+  //   ScaffoldMessenger.of(context).showSnackBar(
+  //     const SnackBar(
+  //       content: Text('โพสต์สำเร็จแล้ว!'),
+  //       backgroundColor: Colors.green,
+  //     ),
+  //   );
+  //   Future.delayed(const Duration(seconds: 1), () {
+  //   Navigator.pop(context);
+  //   });
+  // }
+
   @override
   void dispose() {
     _descriptionController.dispose();
