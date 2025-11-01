@@ -4,8 +4,27 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'map_picker_page.dart'; // or wherever your MapPickerPage lives
 import 'dart:convert';
 import 'nav_bar.dart';
+import 'map_picker_page.dart';
+import 'package:geocoding/geocoding.dart';
+import 'create_post.dart';
+
+LatLng? _latLng;
+
+String formatThaiAddress(Placemark p) {
+  // Safely join components commonly used in TH addresses
+  final parts = [
+    p.street,               // บ้าน/เลขที่ ถนน (sometimes full line)
+    p.subLocality,          // แขวง/ตำบล
+    p.locality,             // เขต/อำเภอ
+  ].where((e) => (e != null && e.trim().isNotEmpty)).toList();
+  // Fallback if street is empty: use name + thoroughfare if available (optional)
+  if (parts.isEmpty) return '${p.name ?? ''} ${p.thoroughfare ?? ''}'.trim();
+  return parts.join(' ');
+  }
 
 class EditProfilePage extends StatefulWidget {
   const EditProfilePage({super.key});
@@ -17,6 +36,7 @@ class EditProfilePage extends StatefulWidget {
 class _EditProfilePageState extends State<EditProfilePage> {
   final _formKey = GlobalKey<FormState>();
   final _storage = const FlutterSecureStorage();
+
 
   // Controllers
   final _usernameController = TextEditingController();
@@ -194,13 +214,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
     );
   }
 
-  void _openLocationPage() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const LocationPage()),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (userData == null) {
@@ -271,17 +284,78 @@ class _EditProfilePageState extends State<EditProfilePage> {
               buildTextField("ชื่อ", _nameController),
               buildTextField("นามสกุล", _lastnameController),
               buildTextField("Bio", _bioController, maxLines: 2),
-              buildTextField(
-                "ที่อยู่ / Location",
-                _locationController,
-                maxLines: null,
-                readOnly: true,
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.location_pin, color: Colors.red),
-                  onPressed: _openLocationPage,
-                ),
-                onTap: _openLocationPage,
+              // Replace the "ที่อยู่ / Location" field section with this:
+              Row(
+                mainAxisAlignment: MainAxisAlignment.start,
+                children: [
+                  Text(
+                    'ที่อยู่', 
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.normal,
+                    )
+                  ),
+                ],      
               ),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color.fromRGBO(0, 0, 0, 0.15),
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.location_on, color: Colors.red[600], size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () async {
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => MapPickerPage(
+                                initial: _latLng ?? const LatLng(13.7563, 100.5018),
+                              ),
+                            ),
+                          );
+
+                          if (result != null) {
+                            setState(() {
+                              _latLng = result.latLng;
+                              _locationController.text = formatThaiAddress(result.placemark);
+                              _provinceController.text = result.placemark.administrativeArea ?? '';
+                              _postcodeController.text = result.placemark.postalCode ?? '';
+                            });
+                          }
+                        },
+                        child: AbsorbPointer(
+                          child: TextField(
+                            controller: _locationController,
+                            decoration: const InputDecoration(
+                              hintText: 'แตะเพื่อเลือกตำแหน่งจากแผนที่\nบ้าน/เลขที่ ถนน แขวง เขต',
+                              hintStyle: TextStyle(color: Colors.grey),
+                              border: InputBorder.none,
+                              isDense: true, 
+                              contentPadding: EdgeInsets.zero, 
+                            ),
+                            maxLines: null,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
               Row(
                 children: [
                   Expanded(
@@ -338,14 +412,3 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 }
 
-class LocationPage extends StatelessWidget {
-  const LocationPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("เลือก Location 📍")),
-      body: const Center(child: Text("ไว้เลือก location ")),
-    );
-  }
-}

@@ -86,15 +86,6 @@ class TemporaryScreen extends StatelessWidget {
               },
               child: const Text('other Profile'),
             ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SettingsPage()),
-                );
-              },
-              child: const Text('setting'),
-            ),
           ],
         ),
       ),
