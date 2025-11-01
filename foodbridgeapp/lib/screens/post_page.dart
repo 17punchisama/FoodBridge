@@ -19,7 +19,7 @@ enum UserStatus {
 }
 
 class PostPage extends StatefulWidget {
-  final int postId = 6; // example post id
+  final int postId = 20; // example post id
   const PostPage({super.key});
 
   // final int postId;
@@ -58,12 +58,16 @@ class _PostPageState extends State<PostPage> {
   String? menuName;
   String? address;
   String? openTime;
+  String openDateFormatted = '-';
+  String openTimeFormatted = '-';
+  String closeTimeFormatted = '-';
   String? contactPhone;
   // String? imageUrl;
   double? postLat;
   double? postLng;
   String? district;
   String? province;
+  String? description;
 
   Duration? _timeRemaining;
   Timer? _countdownTimer;
@@ -93,7 +97,9 @@ class _PostPageState extends State<PostPage> {
           availableCount = data['quantity'] ?? 0;
           menuName = data['title'] ?? '-';
           address = data['address'] ?? '-';
+          description = data['description'] ?? '-';
           openTime = _formatTimeRange(data['open_time'], data['close_time']);
+          openDateFormatted = _formatDate(data['open_time']);
           postCloseTimeUnix = data['close_time'];
           contactPhone = data['phone'] ?? '-';
           // imageUrl = (data['images'] != null && data['images'].isNotEmpty)
@@ -130,6 +136,36 @@ class _PostPageState extends State<PostPage> {
     }
   }
 
+  Future<void> _fetchReceiverCount() async {
+    const storage = FlutterSecureStorage();
+    final token = await storage.read(key: 'token');
+
+    try {
+      final response = await http.get(
+        Uri.parse('https://foodbridge1.onrender.com/bookings?post_id=${widget.postId}'),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final count = data['receiver_count'] ?? 0;
+
+        setState(() {
+          availableCount = count;
+        });
+
+        print('Updated receiver count: $count');
+      } else {
+        print('Failed to fetch receiver count: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error fetching receiver count: $e');
+    }
+  }
+
   Future<void> _fetchUserVerificationStatus() async {
   final user = await VerifiedService.getCurrentUser();
   if (user == null) return;
@@ -158,6 +194,17 @@ class _PostPageState extends State<PostPage> {
         '${closeTime.hour.toString().padLeft(2, '0')}:${closeTime.minute.toString().padLeft(2, '0')}';
 
     return '$openStr - $closeStr';
+  }
+
+  String _formatDate(int? unixTime) {
+    if (unixTime == null) return '-';
+
+    final date =
+        DateTime.fromMillisecondsSinceEpoch(unixTime * 1000, isUtc: true).toLocal();
+
+    return '${date.day.toString().padLeft(2, '0')}/'
+           '${date.month.toString().padLeft(2, '0')}/'
+           '${date.year}';
   }
 
   String _formatDuration(Duration d) {
@@ -233,6 +280,7 @@ class _PostPageState extends State<PostPage> {
     super.initState();
     _fetchPostData();
     _fetchUserVerificationStatus();
+    _fetchReceiverCount();
   }
 
   @override
@@ -286,33 +334,10 @@ class _PostPageState extends State<PostPage> {
                                 const SizedBox(width: 8),
                               ],
                             ),
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 8,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Color(0xFF038263),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    status ?? '', // backend
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                const Icon(
-                                  Icons.share,
-                                  color: Colors.white,
-                                  size: 24,
-                                ),
-                              ],
+                            const Icon(
+                              Icons.share,
+                              color: Colors.white,
+                              size: 24,
                             ),
                           ],
                         ),
@@ -426,7 +451,7 @@ class _PostPageState extends State<PostPage> {
                                             status ?? '', // backend text
                                             textAlign: TextAlign.right,
                                             style: TextStyle(
-                                              color: status == 'เปิดจอง'
+                                              color: status == 'OPEN'
                                               ? Colors.green
                                               : Colors.red,
                                               fontSize: 16,
@@ -470,12 +495,24 @@ class _PostPageState extends State<PostPage> {
                                     ),
                                   ),
                                   const SizedBox(width: 12),
-                                  Text(
-                                    'เวลา $openTime', // backend
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        'วันที่ $openDateFormatted',
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        'เวลา $openTime',
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -641,11 +678,9 @@ class _PostPageState extends State<PostPage> {
                             color: Colors.grey[600],
                           ),
                           childrenPadding: const EdgeInsets.only(top: 12),
-                          children: const [
+                          children: [
                             Text(
-                              'แจกข้าวมันไก่สำหรับผู้ต้องการความช่วยเหลือ 30 ที่ '
-                              'โดยสามารถมารับได้ตั้งแต่เวลา 9.00 - 12.00 ที่อาคารพหลโยธินเพลส ชั้น 32.\n'
-                              'กรุณาโทรติดต่อ 088-888-8888 หากต้องการสอบถามเพิ่มเติม.',
+                              description ?? '', // backend
                               style: TextStyle(
                                 fontSize: 15,
                                 color: Colors.black87,
@@ -780,7 +815,129 @@ class _PostPageState extends State<PostPage> {
           : null,
     );
   }
-  // <CHANGE> Added countdown timer method
+
+  //  method to validate booking conditions
+  Future<bool> _validateBookingConditions() async {
+    const storage = FlutterSecureStorage();
+    final token = await storage.read(key: 'token');
+
+    if (token == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('กรุณาเข้าสู่ระบบก่อนทำการจอง')),
+      );
+      return false;
+    }
+
+    try {
+      // Get current user info
+      final meResponse = await http.get(
+        Uri.parse('https://foodbridge1.onrender.com/me'),
+        headers: {"Authorization": "Bearer $token"},
+      );
+
+      if (meResponse.statusCode != 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ไม่สามารถดึงข้อมูลผู้ใช้ได้')),
+        );
+        return false;
+      }
+
+      final userData = jsonDecode(meResponse.body);
+      final userId = userData['user_id'];
+
+      // Get post details
+      final postResponse = await http.get(
+        Uri.parse('https://foodbridge1.onrender.com/posts/${widget.postId}'),
+        headers: {"Authorization": "Bearer $token"},
+      );
+
+      if (postResponse.statusCode != 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ไม่สามารถดึงข้อมูลโพสต์ได้')),
+        );
+        return false;
+      }
+
+      final postData = jsonDecode(postResponse.body);
+      final providerId = postData['provider_id'];
+      final totalQuantity = postData['quantity'] ?? 0;
+      final bookedCount = postData['booked_count'] ?? 0;
+      final openTimeUnix = postData['open_time'];
+      final closeTimeUnix = postData['close_time'];
+
+      // Convert UNIX timestamps to DateTime
+      final now = DateTime.now().toUtc();
+      final openTime = DateTime.fromMillisecondsSinceEpoch(openTimeUnix * 1000, isUtc: true);
+      final closeTime = DateTime.fromMillisecondsSinceEpoch(closeTimeUnix * 1000, isUtc: true);
+
+      // Check ownership
+      if (providerId == userId) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('ไม่สามารถจองโพสต์ของตัวเองได้'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return false;
+      }
+
+      // Check available slots
+      if (bookedCount >= totalQuantity) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('สิทธิ์การจองเต็มแล้ว'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return false;
+      }
+
+      
+      // Check open/close window
+      final nowLocal = DateTime.now();
+      final openLocal = openTime.toLocal();
+      final closeLocal = closeTime.toLocal();
+      final sameDay = nowLocal.year == openLocal.year &&
+                    nowLocal.month == openLocal.month &&
+                    nowLocal.day == openLocal.day;
+
+      if (sameDay) {
+      // On the same day → check within time window
+        if (nowLocal.isBefore(openLocal) || nowLocal.isAfter(closeLocal)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'สามารถจองได้เฉพาะช่วงเวลา ${openLocal.hour}:${openLocal.minute.toString().padLeft(2, '0')} - ${closeLocal.hour}:${closeLocal.minute.toString().padLeft(2, '0')}',
+              ),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          return false;
+        }
+      } else if (nowLocal.isAfter(closeLocal)) {
+        // The event has passed
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('โพสต์นี้หมดเวลาการจองแล้ว'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return false;
+      }
+      // else if (future day → allow booking freely)
+
+      // ✅ All checks passed
+      return true;
+    } catch (e) {
+      print("Error validating booking: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('เกิดข้อผิดพลาดระหว่างตรวจสอบ')),
+      );
+      return false;
+    }
+  }
+
+  // method to start countdown timer for QR expiration
   void _startCountdown(DateTime closeTime) {
     _countdownTimer?.cancel();
 
@@ -799,7 +956,7 @@ class _PostPageState extends State<PostPage> {
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) => updateTimer());
   }
 
-  // <CHANGE> Added method to generate unique reservation ID
+  // method to generate unique reservation ID
   Future<void> _generateQrToken(int bookingId, int? closeTimeUnix) async {
     const storage = FlutterSecureStorage();
     final token = await storage.read(key: 'token');
@@ -841,7 +998,7 @@ class _PostPageState extends State<PostPage> {
     }
   }
 
-  // <CHANGE> Added method to handle reservation actions based on user status
+  // method to handle reservation actions based on user status
   void _handleReservationAction(BuildContext context) {
     switch (userStatus) {
       case UserStatus.notVerified:
@@ -856,7 +1013,7 @@ class _PostPageState extends State<PostPage> {
     }
   }
   
-  // <CHANGE> Added method to check daily quota before allowing reservation
+  // method to check daily quota before allowing reservation
   Future<bool> _checkDailyQuota() async {
     const storage = FlutterSecureStorage();
     final token = await storage.read(key: 'token');
@@ -899,7 +1056,7 @@ class _PostPageState extends State<PostPage> {
     }
   }
 
-  // <CHANGE> Added dialog for users who need to verify identity
+  // dialog for users who need to verify identity
   void _showVerificationRequiredDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -986,7 +1143,7 @@ class _PostPageState extends State<PostPage> {
     );
   }
 
-  // <CHANGE> Added dialog for confirming reservation
+  // method to create booking
   Future<void> _createBooking() async {
     const storage = FlutterSecureStorage();
     final token = await storage.read(key: 'token');
@@ -1003,11 +1160,12 @@ class _PostPageState extends State<PostPage> {
       if (response.statusCode == 201) {
         final data = jsonDecode(response.body);
         final bookingId = data['booking_id'];
+        
         print("Booking created with ID: $bookingId");
 
         // Generate QR token for this booking
         await _generateQrToken(bookingId, postCloseTimeUnix);
-
+        await _fetchReceiverCount();
         setState(() {
           currentBookingId = bookingId;
           userStatus = UserStatus.verifiedWithReservation;
@@ -1028,6 +1186,7 @@ class _PostPageState extends State<PostPage> {
     }
   }
 
+  // dialog for confirming reservation
   void _showConfirmReservationDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -1111,12 +1270,11 @@ class _PostPageState extends State<PostPage> {
                       child: ElevatedButton(
                         onPressed: () async {
                           Navigator.pop(context);
-                          final hasQuota = await _checkDailyQuota();
+                          final isValid = await _validateBookingConditions(); // Validate conditions
+                          if (!isValid) return;
+                          final hasQuota = await _checkDailyQuota(); // Check daily quota
                           if (!hasQuota) return;
                           await _createBooking(); // Generate reservation ID
-                          // setState(() {
-                          //   userStatus = UserStatus.verifiedWithReservation;
-                          // });
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('จองสิทธิ์สำเร็จ!'),
@@ -1151,7 +1309,7 @@ class _PostPageState extends State<PostPage> {
     );
   } 
 
-  // <CHANGE> Added dialog for canceling reservation
+  // method to cancel reservation
   Future<void> _cancelReservation(int bookingId) async {
     const storage = FlutterSecureStorage();
     final token = await storage.read(key: 'token');
@@ -1168,6 +1326,7 @@ class _PostPageState extends State<PostPage> {
 
       if (response.statusCode == 204) {
         print("Booking cancelled successfully.");
+        await _fetchReceiverCount();
         if (mounted) {
           await _checkDailyQuota();
           setState(() {
@@ -1196,7 +1355,7 @@ class _PostPageState extends State<PostPage> {
       print("Error cancelling booking: $e");
     }
   }
-
+  // dialog for canceling reservation
   void _showCancelReservationDialog(BuildContext context) {
     showDialog(
       context: context,

@@ -35,6 +35,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
   TimeOfDay _openTime = const TimeOfDay(hour: 12, minute: 0);
   TimeOfDay _closeTime = const TimeOfDay(hour: 16, minute: 0);
   String _province = '';   // e.g., กรุงเทพมหานคร
+  String _district = '';   // e.g., เขตบางรัก
   String _postal = '';     // e.g., 10400
   LatLng? _latLng;         // selected location
   
@@ -200,13 +201,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
                               fontWeight: FontWeight.w500,
                             ),
                           ),
-                          // Text(
-                          //   '*ช่องนี้จะแสดงให้ในหน้า อื่นเห็น',
-                          //   style: TextStyle(
-                          //     fontSize: 12,
-                          //     color: Colors.orange[600],
-                          //   ),
-                          // ),
                         ],
                       ),
                       Row(
@@ -545,6 +539,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                 _latLng = result.latLng;
                                 _addressController.text = formatThaiAddress(result.placemark);
                                 _province = result.placemark.administrativeArea ?? '';
+                                _district = result.placemark.subAdministrativeArea ?? '';
                                 _postal   = result.placemark.postalCode ?? '';
                               });
                             }
@@ -588,7 +583,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          _postal.isEmpty ? 'รหัสไปรษณีย์' : _postal, // e.g., 10400
+                          _postal.isEmpty ? 'เขต' : _district, // e.g., เขตบางรัก
                           style: const TextStyle(fontSize: 14),
                         ),
                       ),
@@ -736,22 +731,30 @@ class _CreatePostPageState extends State<CreatePostPage> {
     }
 
     // Convert TimeOfDay to ISO 8601 (RFC3339)
-    DateTime now = DateTime.now();
     final openTimeDate = DateTime(
-      now.year,
-      now.month,
-      now.day,
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
       _openTime.hour,
       _openTime.minute,
     ).toUtc();
 
     final closeTimeDate = DateTime(
-      now.year,
-      now.month,
-      now.day,
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
       _closeTime.hour,
       _closeTime.minute,
     ).toUtc();
+    if (closeTimeDate.isBefore(openTimeDate)) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('เวลาปิดต้องหลังเวลาเปิด'),
+        backgroundColor: Colors.red,
+      ),
+    );
+    return;
+}
 
     // debug print 
     print('Description       : ${_descriptionController.text}');
@@ -777,6 +780,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
     "open_time": openTimeDate.toIso8601String(),
     "close_time": closeTimeDate.toIso8601String(),
     "address": _addressController.text,
+    "province": _province,
+    "district": "",
     "phone": _phoneController.text,
     "lat": _latLng!.latitude,     
     "lng": _latLng!.longitude,    
