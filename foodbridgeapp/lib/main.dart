@@ -13,10 +13,11 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Flutter Demo',
       theme: ThemeData(
-        fontFamily: 'IBMPlexSansThai', 
+        fontFamily: 'IBMPlexSansThai',
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const TemporaryScreen(),  // ใช้หน้าแรกชั่วคราว
+      home: const TemporaryScreen(), // ใช้หน้าแรกชั่วคราว
     );
+    //te
   }
 }
