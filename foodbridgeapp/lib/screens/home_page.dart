@@ -17,7 +17,10 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      bottomNavigationBar: const NavBar(),
+      bottomNavigationBar: NavBar(
+        currentIndex: 0,
+        hasNotification: true,
+      ),
       body: Stack(
         children: [
           // 🔹 พื้นหลัง Gradient
