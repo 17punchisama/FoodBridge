@@ -1,7 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:http/http.dart' as http;
+import 'package:foodbridgeapp/verified_service.dart';
 
 // Enum to track user verification and reservation status
 enum UserStatus {
@@ -11,36 +15,140 @@ enum UserStatus {
 }
 
 class PostPage extends StatefulWidget {
+  final int postId = 6; // example post id
   const PostPage({super.key});
+
+  //final int postId;
+  // const PostPage({super.key, required this.postId});
 
   @override
   State<PostPage> createState() => _PostPageState();
 }
 
 class _PostPageState extends State<PostPage> {
+  GoogleMapController? _mapController;
   // Simulate user status - change this to test different popups
   String userId = "USER001"; // from backend or auth system
   String? reservationId;
   UserStatus userStatus = UserStatus.verifiedNoReservation;
+
   // location data
   double latitude = 13.7563;  // initial value
   double longitude = 100.5018; // initial value
   double? _distanceKm;
-  String? _district;
-  String? _province;
+  // String? _district;
+  // String? _province;
   // post data
-  final String status = 'เปิดจอง'; // e.g. "ปิดแล้ว"
-  final String freeLabel = 'ฟรี';
-  final int availableCount = 10;
-  final String menuName = 'แจกข้าวมันไก่ 30 ที่';
-  final String address = '408/138 อาคารพหลโยธินเพลส ชั้น 32';
-  final String openStatus = 'Open'; // or "Open"
-  final String openTime = '9.00 - 12.00';
-  final String contactPhone = '088-888-8888';
+  // final String status = 'เปิดจอง'; // e.g. "ปิดแล้ว"
+  // final String freeLabel = 'ฟรี';
+  // final int availableCount = 10;
+  // final String menuName = 'แจกข้าวมันไก่ 30 ที่';
+  // final String address = '408/138 อาคารพหลโยธินเพลส ชั้น 32';
+  // final String openStatus = 'Open'; // or "Open"
+  // final String openTime = '9.00 - 12.00';
+  // final String contactPhone = '088-888-8888';
   final String imagePath = 'assets/images/savory_img.png';
+  String? status;
+  String? freeLabel;
+  int? availableCount;
+  String? menuName;
+  String? address;
+  String? openTime;
+  String? contactPhone;
+  // String? imageUrl;
+  double? postLat;
+  double? postLng;
+  String? district;
+  String? province;
 
+  Future<void> _fetchPostData() async {
+    const storage = FlutterSecureStorage();
+    final token = await storage.read(key: 'token');
 
-  Future<void> _calculateDistance(LatLng destination, String district, String province) async {
+    try {
+      final response = await http.get(
+        Uri.parse('https://foodbridge1.onrender.com/posts/${widget.postId}'),
+        headers: {"Content-Type": "application/json",
+        "Authorization": "Bearer $token",
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        setState(() {
+          status = data['status'] ?? 'เปิดจอง';
+          freeLabel = data['is_giveaway'] == true ? 'ฟรี' : '';
+          availableCount = data['quantity'] ?? 0;
+          menuName = data['title'] ?? '-';
+          address = data['address'] ?? '-';
+          openTime = _formatTimeRange(data['open_time'], data['close_time']);
+          contactPhone = data['phone'] ?? '-';
+          // imageUrl = (data['images'] != null && data['images'].isNotEmpty)
+          //     ? data['images'][0]
+          //     : null;
+          postLat = data['lat'];
+          postLng = data['lng'];
+          district = data['district'] ?? 'ไม่ทราบ';
+          province = data['province'] ?? 'ไม่ทราบ';
+        });
+        
+        // Move map to post location
+        if (postLat != null && postLng != null && _mapController != null) {
+          _mapController!.animateCamera(
+            CameraUpdate.newLatLng(
+              LatLng(postLat!, postLng!),
+            ),
+          );
+        }
+
+        // calculate distance using coordinates
+        if (postLat != null && postLng != null) {
+          await _calculateDistance(
+            LatLng(postLat!, postLng!),
+            district ?? '-',
+            province ?? '-',
+          );
+        }
+      } else {
+        print('Failed to load post: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error fetching post: $e');
+    }
+  }
+
+  Future<void> _fetchUserVerificationStatus() async {
+  final user = await VerifiedService.getCurrentUser();
+  if (user == null) return;
+
+  setState(() {
+    userId = user['user_id'].toString();
+    userStatus = user['is_verified'] == true
+        ? UserStatus.verifiedNoReservation
+        : UserStatus.notVerified;
+  });
+}
+
+  String _formatTimeRange(int? open,  int? close) {
+    if (open == null || close == null) return '-';
+
+    // Convert from UNIX seconds to DateTime (local time)
+    final openTime =
+        DateTime.fromMillisecondsSinceEpoch(open * 1000, isUtc: true).toLocal();
+    final closeTime =
+        DateTime.fromMillisecondsSinceEpoch(close * 1000, isUtc: true).toLocal();
+
+    // Format as HH:mm
+    final openStr =
+        '${openTime.hour.toString().padLeft(2, '0')}:${openTime.minute.toString().padLeft(2, '0')}';
+    final closeStr =
+        '${closeTime.hour.toString().padLeft(2, '0')}:${closeTime.minute.toString().padLeft(2, '0')}';
+
+    return '$openStr - $closeStr';
+  }
+
+  Future<void> _calculateDistance(LatLng destination, String districtName, String provinceName) async {
     bool serviceEnabled;
     LocationPermission permission;
 
@@ -51,8 +159,8 @@ class _PostPageState extends State<PostPage> {
       if (mounted) {
         setState(() {
           _distanceKm = null;
-          _district = district;
-          _province = province;
+          district = districtName;
+          province = provinceName;
         });
       }
       return;
@@ -65,17 +173,15 @@ class _PostPageState extends State<PostPage> {
         if (mounted) {
           setState(() {
             _distanceKm = null;
-            _district = district;
-            _province = province;
+            district = districtName;
+            province = provinceName;
           });
         }
         return;
       }
     }
     // get current position
-    Position position = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
-    );
+    Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high,);
 
     double distanceInMeters = Geolocator.distanceBetween(
       position.latitude,
@@ -84,25 +190,24 @@ class _PostPageState extends State<PostPage> {
       destination.longitude,
     );
 
-    setState(() {
-      _distanceKm = distanceInMeters / 1000; // convert to km
-      _district = district;
-      _province = province;
-      print('Dest: ${destination.latitude}, ${destination.longitude}');
-      print('Position: ${position.latitude}, ${position.longitude}');
-      print('Distance: $_distanceKm km');
-    });
+    if (mounted) {
+      setState(() {
+        _distanceKm = distanceInMeters / 1000; // convert to km
+        district = districtName;
+        province = provinceName;
+
+        print('Destination: ${destination.latitude}, ${destination.longitude}');
+        print('Current Position: ${position.latitude}, ${position.longitude}');
+        print('Distance: ${_distanceKm!.toStringAsFixed(2)} km');
+      });
+    }
   }
 
   @override
   void initState() {
     super.initState();
-    // Example: backend gives these
-    final backendLatLng = LatLng(13.7279, 100.5241); // from backend
-    final backendDistrict = 'เขตลาดกระบัง';
-    final backendProvince = 'กรุงเทพฯ';
-
-    _calculateDistance(backendLatLng, backendDistrict, backendProvince);
+    _fetchPostData();
+    _fetchUserVerificationStatus();
   }
 
   @override
@@ -166,7 +271,7 @@ class _PostPageState extends State<PostPage> {
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
-                                status, // backend
+                                status ?? '', // backend
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 14,
@@ -218,7 +323,7 @@ class _PostPageState extends State<PostPage> {
                               Row(
                                 children: [
                                   Text(
-                                    freeLabel, // backend
+                                    freeLabel ?? '', // backend
                                     style: TextStyle(
                                       color: Colors.red,
                                       fontSize: 24,
@@ -270,7 +375,7 @@ class _PostPageState extends State<PostPage> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          menuName, // backend
+                                          menuName ?? '', // backend
                                           style: TextStyle(
                                             fontSize: 32,
                                             fontWeight: FontWeight.bold,
@@ -278,7 +383,7 @@ class _PostPageState extends State<PostPage> {
                                         ),
                                         SizedBox(height: 4),
                                         Text(
-                                          address, // backend
+                                          address ?? '', // backend
                                           style: TextStyle(
                                             fontSize: 14,
                                             color: Colors.grey,
@@ -291,10 +396,10 @@ class _PostPageState extends State<PostPage> {
                                       alignment: Alignment.centerRight,
                                       height: 40, 
                                       child: Text(
-                                        openStatus, // backend text
+                                        status ?? '', // backend text
                                         textAlign: TextAlign.right,
                                         style: TextStyle(
-                                          color: openStatus == 'Open'
+                                          color: status == 'เปิดจอง'
                                           ? Colors.green
                                           : Colors.red,
                                           fontSize: 16,
@@ -376,7 +481,7 @@ class _PostPageState extends State<PostPage> {
                                 children: [
                                   Text(
                                     _distanceKm != null
-                                      ? 'ระยะทาง ${_distanceKm!.toStringAsFixed(1)} กม'
+                                      ? 'ระยะทาง ${_distanceKm!.toStringAsFixed(1)} กม' // backend
                                       : 'กำลังคำนวณระยะทาง...',
                                     style: TextStyle(
                                       fontSize: 16,
@@ -384,9 +489,9 @@ class _PostPageState extends State<PostPage> {
                                     ),
                                   ),
                                   Text(
-                                    _district != null && _province != null
-                                      ? '$_district, $_province'
-                                      : 'กำลังดึงข้อมูลที่ตั้ง...',
+                                    district != null && province != null 
+                                    ? '$district, $province' 
+                                    : 'กำลังดึงข้อมูลที่ตั้ง...',// backend
                                     style: TextStyle(
                                       fontSize: 14,
                                       color: Colors.grey,
@@ -421,7 +526,7 @@ class _PostPageState extends State<PostPage> {
                               ),
                               const SizedBox(width: 12),
                               Text(
-                                contactPhone, // backend
+                                contactPhone ?? '', // backend
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w500,
@@ -446,20 +551,29 @@ class _PostPageState extends State<PostPage> {
                       borderRadius: BorderRadius.circular(12),
                         child: GoogleMap(
                           initialCameraPosition: CameraPosition(
-                            target: LatLng(latitude, longitude), // from backend
+                            target: LatLng(
+                              postLat ?? latitude,     // from backend
+                              postLng ?? longitude,     // from backend
+                            ),
                             zoom: 15,
                           ),
                           markers: {
                             Marker(
                               markerId: const MarkerId('location'),
-                              position: LatLng(latitude, longitude),
+                              position: LatLng(
+                                postLat ?? latitude,     // from backend
+                                postLng ?? longitude,     // from backend
+                              ),
                             ),
                           },
-                          myLocationButtonEnabled: false,
-                          zoomControlsEnabled: false,
+                          onMapCreated: (controller) {
+                            _mapController = controller;
+                          },
+                          myLocationButtonEnabled: false, // static preview
+                          zoomControlsEnabled: false, // static preview
                           scrollGesturesEnabled: false, // static preview
-                          rotateGesturesEnabled: false,
-                          tiltGesturesEnabled: false,
+                          rotateGesturesEnabled: false, // static preview
+                          tiltGesturesEnabled: false, // static preview
                         ),
                       ),
                   ),

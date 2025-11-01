@@ -23,8 +23,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
   final TextEditingController _phoneController = TextEditingController();
 
   DateTime _selectedDate = DateTime.now();
-  String _fmtTime(TimeOfDay t) =>
-    '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+  // String _fmtTime(TimeOfDay t) =>
+  //   '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
   String _fmtDate(DateTime d) =>
     '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
   // final _thai = DateFormat('d MMM yyyy', 'th'); // e.g., 28 ก.ย. 2025
