@@ -6,6 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'profile_page.dart';
 import 'register_page.dart';
 import 'change_password_page.dart';
+import 'other_profile_page.dart';
 
 
 class LoginPage extends StatefulWidget {
@@ -43,7 +44,7 @@ class _LoginPageState extends State<LoginPage> {
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const ProfilePage()),
+        MaterialPageRoute(builder: (context) => const OtherProfilePage(userId: 2)),
       );
     } else {
       final error = jsonDecode(response.body);

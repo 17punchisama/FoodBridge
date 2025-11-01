@@ -5,6 +5,8 @@ import 'home_page.dart';
 import 'post_page.dart';
 import 'edit_profile_page.dart';
 import 'profile_page.dart';
+import 'other_profile_page.dart';
+import 'setting_page.dart';
 
 class TemporaryScreen extends StatelessWidget {
   const TemporaryScreen({super.key});
@@ -74,6 +76,24 @@ class TemporaryScreen extends StatelessWidget {
                 );
               },
               child: const Text('Profile'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const OtherProfilePage(userId: 3)),
+                );
+              },
+              child: const Text('other Profile'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SettingsPage()),
+                );
+              },
+              child: const Text('setting'),
             ),
           ],
         ),
