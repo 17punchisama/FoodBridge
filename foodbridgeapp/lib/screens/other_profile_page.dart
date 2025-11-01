@@ -183,22 +183,14 @@ class _OtherProfilePageState extends State<OtherProfilePage> {
                   CircleAvatar(
                     radius: 90,
                     backgroundColor: Colors.grey[200],
-                    backgroundImage:
-                        (userData?['avatar_url'] != null
-                                ? NetworkImage(userData!['avatar_url'])
-                                : null)
-                            as ImageProvider<Object>?,
-                    child: userData?['avatar_url'] == null
-                        ? SvgPicture.asset(
-                            'assets/icons/no_profile.svg',
-                            width: 180,
-                            height: 180,
-                          )
-                        : null,
+                    backgroundImage: NetworkImage(
+                      userData?['avatar_url'] ??
+                          'https://www.shutterstock.com/image-vector/avatar-gender-neutral-silhouette-vector-600nw-2470054311.jpg',
+                    ),
                   ),
                   const SizedBox(height: 16),
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
                         userData?['full_name'] ?? 'Unknown',

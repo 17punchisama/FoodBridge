@@ -302,22 +302,43 @@ class _ProfilePageState extends State<ProfilePage> {
                           : null,
                     ),
                     const SizedBox(width: 8),
-                    Row(
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          fullName ?? 'Unknown', 
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                          )
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          children: [
+                            Text(
+                              fullName ?? 'Unknown', 
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              )
+                            ),
+                            if (userData?['is_vertify'] == true)
+                              const Padding(
+                                padding: EdgeInsets.only(left: 6),
+                                child: Icon(Icons.verified, color: Colors.orange, size: 22),
+                              ),
+                          ],
                         ),
-                        if (userData?['is_vertify'] == true)
-                          const Padding(
-                            padding: EdgeInsets.only(left: 6),
-                            child: Icon(Icons.verified, color: Colors.orange, size: 22),
-                          ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.location_on, color: Colors.red, size: 20),
+                            const SizedBox(width: 2),
+                            Text(
+                              province,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                color: Color.fromARGB(255, 3, 130, 99),
+                                fontWeight: FontWeight.normal,
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
-                    )
+                    ),
                   ],
                 ),
                 Row(
@@ -344,21 +365,21 @@ class _ProfilePageState extends State<ProfilePage> {
               ],
             ),
 
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                const Icon(Icons.location_on, color: Colors.red, size: 28),
-                const SizedBox(width: 4),
-                Text(
-                  province,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    color: Color.fromARGB(255, 3, 130, 99),
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
+            // const SizedBox(height: 18),
+            // Row(
+            //   children: [
+            //     const Icon(Icons.location_on, color: Colors.red, size: 28),
+            //     const SizedBox(width: 4),
+            //     Text(
+            //       province,
+            //       style: const TextStyle(
+            //         fontSize: 20,
+            //         color: Color.fromARGB(255, 3, 130, 99),
+            //         fontWeight: FontWeight.bold,
+            //       ),
+            //     ),
+            //   ],
+            // ),
 
             const SizedBox(height: 16),
             // 💡 Daily Limit Box
@@ -450,32 +471,41 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
               child: SizedBox(
                 height: 150,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: bookings.map((booking) {
-                    final open = DateTime.fromMillisecondsSinceEpoch(
-                      booking['open_time'] * 1000,
-                    );
-                    final close = DateTime.fromMillisecondsSinceEpoch(
-                      booking['close_time'] * 1000,
-                    );
-                    String timeRange =
-                        'เปิด ${open.hour}.${open.minute.toString().padLeft(2, '0')} - ${close.hour}.${close.minute.toString().padLeft(2, '0')}';
-                    final expireAt = DateTime.parse(
-                      booking['expire_at'],
-                    ).toLocal();
-                    // final duration = expireAt.difference(DateTime.now());
+                child: bookings.isNotEmpty
+                    ? ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: bookings.map((booking) {
+                          final open = DateTime.fromMillisecondsSinceEpoch(
+                            booking['open_time'] * 1000,
+                          );
+                          final close = DateTime.fromMillisecondsSinceEpoch(
+                            booking['close_time'] * 1000,
+                          );
+                          String timeRange =
+                              'เปิด ${open.hour}.${open.minute.toString().padLeft(2, '0')} - ${close.hour}.${close.minute.toString().padLeft(2, '0')}';
+                          final expireAt = DateTime.parse(
+                            booking['expire_at'],
+                          ).toLocal();
 
-                    return PreviewPostBox(
-                      status: booking['status'],
-                      title: booking['title'],
-                      owner_image: booking['owner_image'],
-                      openCloseTime: timeRange,
-                      expireAt: expireAt,
-                      // duration: duration,
-                    );
-                  }).toList(),
-                ),
+                          return PreviewPostBox(
+                            status: booking['status'],
+                            title: booking['title'],
+                            owner_image: booking['owner_image'],
+                            openCloseTime: timeRange,
+                            expireAt: expireAt,
+                          );
+                        }).toList(),
+                      )
+                    : const Center(
+                        child: Text(
+                          "ยังไม่มีรายการ",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ),
               ),
             ),
 
