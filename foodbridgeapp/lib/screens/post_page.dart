@@ -1,11 +1,15 @@
 import 'dart:convert';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:http/http.dart' as http;
+
 import 'package:foodbridgeapp/verified_service.dart';
+
 
 // Enum to track user verification and reservation status
 enum UserStatus {
@@ -15,11 +19,11 @@ enum UserStatus {
 }
 
 class PostPage extends StatefulWidget {
-  // final int postId = 6; // example post id
-  // const PostPage({super.key});
+  final int postId = 6; // example post id
+  const PostPage({super.key});
 
-  final int postId;
-  const PostPage({super.key, required this.postId});
+  // final int postId;
+  // const PostPage({super.key, required this.postId});
 
   @override
   State<PostPage> createState() => _PostPageState();
@@ -61,6 +65,13 @@ class _PostPageState extends State<PostPage> {
   String? district;
   String? province;
 
+  Duration? _timeRemaining;
+  Timer? _countdownTimer;
+  int? userQuotaLeft;
+
+  int? currentBookingId;
+  int? postCloseTimeUnix;
+
   Future<void> _fetchPostData() async {
     const storage = FlutterSecureStorage();
     final token = await storage.read(key: 'token');
@@ -83,6 +94,7 @@ class _PostPageState extends State<PostPage> {
           menuName = data['title'] ?? '-';
           address = data['address'] ?? '-';
           openTime = _formatTimeRange(data['open_time'], data['close_time']);
+          postCloseTimeUnix = data['close_time'];
           contactPhone = data['phone'] ?? '-';
           // imageUrl = (data['images'] != null && data['images'].isNotEmpty)
           //     ? data['images'][0]
@@ -146,6 +158,19 @@ class _PostPageState extends State<PostPage> {
         '${closeTime.hour.toString().padLeft(2, '0')}:${closeTime.minute.toString().padLeft(2, '0')}';
 
     return '$openStr - $closeStr';
+  }
+
+  String _formatDuration(Duration d) {
+    final hours = d.inHours;
+    final minutes = d.inMinutes.remainder(60);
+    final seconds = d.inSeconds.remainder(60);
+    if (hours > 0) {
+      return "$hours ชั่วโมง ${minutes.toString().padLeft(2, '0')} นาที";
+    } else if (minutes > 0) {
+      return "$minutes นาที ${seconds.toString().padLeft(2, '0')} วินาที";
+    } else {
+      return "$seconds วินาที";
+    }
   }
 
   Future<void> _calculateDistance(LatLng destination, String districtName, String provinceName) async {
@@ -214,513 +239,527 @@ class _PostPageState extends State<PostPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       extendBody: true, // To allow bottom button to float over content
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // Header with food image
-            Stack(
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            child: Column(
               children: [
-                 Image.asset(
-                  imagePath, // backend image path
-                  width: double.infinity,
-                  height: 280,
-                  fit: BoxFit.cover,
-                ),
-                Container(
-                  height: 100,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.black.withOpacity(0.3),
-                        Colors.transparent,
-                      ],
+                // Header with food image
+                Stack(
+                  children: [
+                    Image.asset(
+                      imagePath, // backend image path
+                      width: double.infinity,
+                      height: 280,
+                      fit: BoxFit.cover,
                     ),
-                  ),
-                ),
-                // Top navigation
-                SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            GestureDetector(
-                              onTap: () => Navigator.pop(context),
-                              child: const Icon(
-                                Icons.arrow_back_ios,
-                                color: Colors.white,
-                                size: 24,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
+                    Container(
+                      height: 100,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.black.withOpacity(0.3),
+                            Colors.transparent,
                           ],
                         ),
-                        Row(
+                      ),
+                    ),
+                    // Top navigation
+                    SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Color(0xFF038263),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                status ?? '', // backend
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
+                            Row(
+                              children: [
+                                GestureDetector(
+                                  onTap: () => Navigator.pop(context),
+                                  child: const Icon(
+                                    Icons.arrow_back_ios,
+                                    color: Colors.white,
+                                    size: 24,
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(width: 8),
+                              ],
                             ),
-                            const SizedBox(width: 8),
-                            const Icon(
-                              Icons.share,
-                              color: Colors.white,
-                              size: 24,
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Color(0xFF038263),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    status ?? '', // backend
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Icon(
+                                  Icons.share,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
-            // Content section
-            Container(
-              color: Colors.grey[100],
-              child: Column(
-                children: [
-                  // Promotional banner
-                  Container(
-                    margin: const EdgeInsets.all(16),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withOpacity(0.1),
-                          spreadRadius: 1,
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
+                // Content section
+                Container(
+                  color: Colors.grey[100],
+                  child: Column(
+                    children: [
+                      // Promotional banner
+                      Container(
+                        margin: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.withOpacity(0.1),
+                              spreadRadius: 1,
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    freeLabel ?? '', // backend
-                                    style: TextStyle(
-                                      color: Colors.red,
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  const Text(
-                                    'จำนวน',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: Color(0xFFF58319),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Color(0xFF038263),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      '$availableCount', // backend
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  const Text(
-                                    'ที่',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: Color(0xFFF58319),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          menuName ?? '', // backend
-                                          style: TextStyle(
-                                            fontSize: 32,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        SizedBox(height: 4),
-                                        Text(
-                                          address ?? '', // backend
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            color: Colors.grey,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Container(
-                                      alignment: Alignment.centerRight,
-                                      height: 40, 
-                                      child: Text(
-                                        status ?? '', // backend text
-                                        textAlign: TextAlign.right,
+                                  Row(
+                                    children: [
+                                      Text(
+                                        freeLabel ?? '', // backend
                                         style: TextStyle(
-                                          color: status == 'เปิดจอง'
-                                          ? Colors.green
-                                          : Colors.red,
-                                          fontSize: 16,
+                                          color: Colors.red,
+                                          fontSize: 24,
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
+                                      const Spacer(),
+                                      const Text(
+                                        'จำนวน',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          color: Color(0xFFF58319),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Color(0xFF038263),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          '$availableCount', // backend
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      const Text(
+                                        'ที่',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          color: Color(0xFFF58319),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              menuName ?? '', // backend
+                                              style: TextStyle(
+                                                fontSize: 32,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            SizedBox(height: 4),
+                                            Text(
+                                              address ?? '', // backend
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                color: Colors.grey,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Container(
+                                          alignment: Alignment.centerRight,
+                                          height: 40, 
+                                          child: Text(
+                                            status ?? '', // backend text
+                                            textAlign: TextAlign.right,
+                                            style: TextStyle(
+                                              color: status == 'เปิดจอง'
+                                              ? Colors.green
+                                              : Colors.red,
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
-                  
-                  // Restaurant info cards
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Column(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Color(0xFF038263).withOpacity(0.1),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.access_time,
-                                  color: Color(0xFF038263),
-                                  size: 20,
-                                ),
+                      ),
+                      
+                      // Restaurant info cards
+                      Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Column(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              margin: const EdgeInsets.only(bottom: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              const SizedBox(width: 12),
-                              Text(
-                                'เวลา $openTime', // backend
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Colors.red[50],
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.location_on,
-                                  color: Colors.red[600],
-                                  size: 20,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                              child: Row(
                                 children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Color(0xFF038263).withOpacity(0.1),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.access_time,
+                                      color: Color(0xFF038263),
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
                                   Text(
-                                    _distanceKm != null
-                                      ? 'ระยะทาง ${_distanceKm!.toStringAsFixed(1)} กม' // backend
-                                      : 'กำลังคำนวณระยะทาง...',
+                                    'เวลา $openTime', // backend
                                     style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w500,
                                     ),
                                   ),
+                                ],
+                              ),
+                            ),
+                            
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              margin: const EdgeInsets.only(bottom: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red[50],
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.location_on,
+                                      color: Colors.red[600],
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _distanceKm != null
+                                          ? 'ระยะทาง ${_distanceKm!.toStringAsFixed(1)} กม' // backend
+                                          : 'กำลังคำนวณระยะทาง...',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      Text(
+                                        district != null && province != null 
+                                        ? '$district, $province' 
+                                        : 'กำลังดึงข้อมูลที่ตั้ง...',// backend
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              margin: const EdgeInsets.only(bottom: 16),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Color(0xFF038263).withOpacity(0.1),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.phone,
+                                      color: Color(0xFF038263),
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
                                   Text(
-                                    district != null && province != null 
-                                    ? '$district, $province' 
-                                    : 'กำลังดึงข้อมูลที่ตั้ง...',// backend
+                                    contactPhone ?? '', // backend
                                     style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.grey,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
                                     ),
                                   ),
                                 ],
                               ),
-                            ],
-                          ),
-                        ),
-                        
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          margin: const EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Color(0xFF038263).withOpacity(0.1),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.phone,
-                                  color: Color(0xFF038263),
-                                  size: 20,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                contactPhone ?? '', // backend
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  
-                  // Map section
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
-                    height: 200,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      color: Colors.grey[300],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                        child: GoogleMap(
-                          initialCameraPosition: CameraPosition(
-                            target: LatLng(
-                              postLat ?? latitude,     // from backend
-                              postLng ?? longitude,     // from backend
                             ),
-                            zoom: 15,
-                          ),
-                          markers: {
-                            Marker(
-                              markerId: const MarkerId('location'),
-                              position: LatLng(
-                                postLat ?? latitude,     // from backend
-                                postLng ?? longitude,     // from backend
-                              ),
-                            ),
-                          },
-                          onMapCreated: (controller) {
-                            _mapController = controller;
-                          },
-                          myLocationButtonEnabled: false, // static preview
-                          zoomControlsEnabled: false, // static preview
-                          scrollGesturesEnabled: false, // static preview
-                          rotateGesturesEnabled: false, // static preview
-                          tiltGesturesEnabled: false, // static preview
+                          ],
                         ),
                       ),
-                  ),
+                      
+                      // Map section
+                      Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                        height: 200,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: Colors.grey[300],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                            child: GoogleMap(
+                              initialCameraPosition: CameraPosition(
+                                target: LatLng(
+                                  postLat ?? latitude,     // from backend
+                                  postLng ?? longitude,     // from backend
+                                ),
+                                zoom: 15,
+                              ),
+                              markers: {
+                                Marker(
+                                  markerId: const MarkerId('location'),
+                                  position: LatLng(
+                                    postLat ?? latitude,     // from backend
+                                    postLng ?? longitude,     // from backend
+                                  ),
+                                ),
+                              },
+                              onMapCreated: (controller) {
+                                _mapController = controller;
+                              },
+                              myLocationButtonEnabled: false, // static preview
+                              zoomControlsEnabled: false, // static preview
+                              scrollGesturesEnabled: false, // static preview
+                              rotateGesturesEnabled: false, // static preview
+                              tiltGesturesEnabled: false, // static preview
+                            ),
+                          ),
+                      ),
 
-                  const SizedBox(height: 20),
-                  // extra Details section
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withOpacity(0.1),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: ExpansionTile(
-                      shape: const RoundedRectangleBorder(), // remove default divider
-                      tilePadding: EdgeInsets.zero,
-                      title: const Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'รายละเอียด',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      trailing: Icon(
-                        Icons.keyboard_arrow_down,
-                        color: Colors.grey[600],
-                      ),
-                      childrenPadding: const EdgeInsets.only(top: 12),
-                      children: const [
-                        Text(
-                          'แจกข้าวมันไก่สำหรับผู้ต้องการความช่วยเหลือ 30 ที่ '
-                          'โดยสามารถมารับได้ตั้งแต่เวลา 9.00 - 12.00 ที่อาคารพหลโยธินเพลส ชั้น 32.\n'
-                          'กรุณาโทรติดต่อ 088-888-8888 หากต้องการสอบถามเพิ่มเติม.',
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: Colors.black87,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 100),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-      
-      // <CHANGE> Updated bottom button to show reservation confirmation
-      bottomNavigationBar: Container(
-        color: Colors.transparent,
-        padding: const EdgeInsets.all(16),
-        child: userStatus == UserStatus.verifiedWithReservation
-            ? Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  //  Show QR code when reserved
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withOpacity(0.1),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        const Text(
-                          'แสดง QR CODE เพื่อยืนยันการจอง',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        // QR Code
-                        QrImageView(
-                          data: reservationId ?? '', // reservation ID
-                          version: QrVersions.auto,
-                          size: 150,
-                          backgroundColor: Colors.white,
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'รหัสจอง: $reservationId',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  // Cancel button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        _handleReservationAction(context);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red[600],
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(25),
-                        ),
-                      ),
-                      child: const Text(
-                        'ยกเลิกการจอง',
-                        style: TextStyle(
+                      const SizedBox(height: 20),
+                      // extra Details section
+                      Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
                           color: Colors.white,
-                          fontSize: 18,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.withOpacity(0.1),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: ExpansionTile(
+                          shape: const RoundedRectangleBorder(), // remove default divider
+                          tilePadding: EdgeInsets.zero,
+                          title: const Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'รายละเอียด',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          trailing: Icon(
+                            Icons.keyboard_arrow_down,
+                            color: Colors.grey[600],
+                          ),
+                          childrenPadding: const EdgeInsets.only(top: 12),
+                          children: const [
+                            Text(
+                              'แจกข้าวมันไก่สำหรับผู้ต้องการความช่วยเหลือ 30 ที่ '
+                              'โดยสามารถมารับได้ตั้งแต่เวลา 9.00 - 12.00 ที่อาคารพหลโยธินเพลส ชั้น 32.\n'
+                              'กรุณาโทรติดต่อ 088-888-8888 หากต้องการสอบถามเพิ่มเติม.',
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: Colors.black87,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 100),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 240), // extra space for bottom overlay
+              ], 
+            ),
+          ),
+        // Floating QR section (only when reserved)
+        if (userStatus == UserStatus.verifiedWithReservation)
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 16,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      const Text(
+                        'แสดง QR CODE เพื่อยืนยันการจอง',
+                        style: TextStyle(
+                          fontSize: 16,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
+                      const SizedBox(height: 12),
+                      QrImageView(
+                        data: reservationId ?? '',
+                        version: QrVersions.auto,
+                        size: 150,
+                        backgroundColor: Colors.white,
+                      ),
+                      const SizedBox(height: 12),
+                      if (_timeRemaining != null)
+                        Text(
+                          _timeRemaining!.inSeconds > 0
+                            ? "QR หมดอายุใน ${_formatDuration(_timeRemaining!)}"
+                            : "QR หมดอายุแล้ว",
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.red,
+                          ),
+                        ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'รหัสจอง: $reservationId',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: () => _handleReservationAction(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red[600],
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                    ),
+                    child: const Text(
+                      'ยกเลิกการจอง',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                ],
-              )
-            : SizedBox(
+                ),
+              ],
+            ),
+          ),          
+        ], 
+      ),
+
+      // Regular reservation button (when not reserved)
+      bottomNavigationBar: userStatus != UserStatus.verifiedWithReservation
+          ? Container(
+              padding: const EdgeInsets.all(16),
+              child: SizedBox(
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: () {
-                    _handleReservationAction(context);
-                  },
+                  onPressed: () => _handleReservationAction(context),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF038263),
                     shape: RoundedRectangleBorder(
@@ -737,16 +776,69 @@ class _PostPageState extends State<PostPage> {
                   ),
                 ),
               ),
-      ),
+            )
+          : null,
     );
   }
-  // <CHANGE> Added method to generate unique reservation ID
-   void _generateReservationId() {
-    if (reservationId != null) return; // already generated
+  // <CHANGE> Added countdown timer method
+  void _startCountdown(DateTime closeTime) {
+    _countdownTimer?.cancel();
 
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    reservationId = "$userId-$timestamp"; // e.g. USER001-1718203562000
-    print("Generated reservation ID: $reservationId");
+    void updateTimer() {
+      final now = DateTime.now().toUtc();
+      final diff = closeTime.difference(now);
+      if (diff.isNegative) {
+        _countdownTimer?.cancel();
+        setState(() => _timeRemaining = Duration.zero);
+      } else {
+        setState(() => _timeRemaining = diff);
+      }
+    }
+
+    updateTimer();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) => updateTimer());
+  }
+
+  // <CHANGE> Added method to generate unique reservation ID
+  Future<void> _generateQrToken(int bookingId, int? closeTimeUnix) async {
+    const storage = FlutterSecureStorage();
+    final token = await storage.read(key: 'token');
+
+    // Compute TTL
+    int ttlSeconds = 600; // default 10 minutes
+    if (closeTimeUnix != null) {
+      final closeTime = DateTime.fromMillisecondsSinceEpoch(closeTimeUnix * 1000);
+      final now = DateTime.now().toUtc();
+      final diff = closeTime.difference(now).inSeconds;
+      if (diff > 0) ttlSeconds = diff;
+      _startCountdown(closeTime);
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse('https://foodbridge1.onrender.com/bookings/$bookingId/qr'),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+        body: jsonEncode({
+          "ttl_seconds": ttlSeconds,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          reservationId = data['token'] ?? 'unknown_token';
+        });
+        print("QR Token received: $reservationId");
+      } else {
+        print("Failed to generate QR: ${response.statusCode}");
+        print("Response body: ${response.body}");
+      }
+    } catch (e) {
+      print("Error generating QR: $e");
+    }
   }
 
   // <CHANGE> Added method to handle reservation actions based on user status
@@ -761,6 +853,49 @@ class _PostPageState extends State<PostPage> {
       case UserStatus.verifiedWithReservation:
         _showCancelReservationDialog(context);
         break;
+    }
+  }
+  
+  // <CHANGE> Added method to check daily quota before allowing reservation
+  Future<bool> _checkDailyQuota() async {
+    const storage = FlutterSecureStorage();
+    final token = await storage.read(key: 'token');
+
+    try {
+      final response = await http.get(
+        Uri.parse('https://foodbridge1.onrender.com/bookings/daily-limit'),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final left = data['left_today'] ?? 0;
+
+        if (mounted) {
+          setState(() {
+            userQuotaLeft = left;
+          });
+        }
+        print("User quota left today: $left");
+        if (left > 0) return true;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('คุณใช้สิทธิ์ครบแล้วสำหรับวันนี้'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return false;
+      } else {
+        print("Failed to fetch quota: ${response.statusCode}");
+        return false;
+      }
+    } catch (e) {
+      print("Error checking quota: $e");
+      return false;
     }
   }
 
@@ -852,6 +987,47 @@ class _PostPageState extends State<PostPage> {
   }
 
   // <CHANGE> Added dialog for confirming reservation
+  Future<void> _createBooking() async {
+    const storage = FlutterSecureStorage();
+    final token = await storage.read(key: 'token');
+
+    try {
+      final response = await http.post(
+        Uri.parse('https://foodbridge1.onrender.com/posts/${widget.postId}/bookings'),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+      );
+
+      if (response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        final bookingId = data['booking_id'];
+        print("Booking created with ID: $bookingId");
+
+        // Generate QR token for this booking
+        await _generateQrToken(bookingId, postCloseTimeUnix);
+
+        setState(() {
+          currentBookingId = bookingId;
+          userStatus = UserStatus.verifiedWithReservation;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('จองสิทธิ์สำเร็จ!'),
+            backgroundColor: Color(0xFF038263),
+          ),
+        );
+      } else {
+        print("Booking failed: ${response.statusCode}");
+        print("Response: ${response.body}");
+      }
+    } catch (e) {
+      print("Error creating booking: $e");
+    }
+  }
+
   void _showConfirmReservationDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -933,12 +1109,14 @@ class _PostPageState extends State<PostPage> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: () {
+                        onPressed: () async {
                           Navigator.pop(context);
-                          _generateReservationId(); // Generate reservation ID
-                          setState(() {
-                            userStatus = UserStatus.verifiedWithReservation;
-                          });
+                          final hasQuota = await _checkDailyQuota();
+                          if (!hasQuota) return;
+                          await _createBooking(); // Generate reservation ID
+                          // setState(() {
+                          //   userStatus = UserStatus.verifiedWithReservation;
+                          // });
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('จองสิทธิ์สำเร็จ!'),
@@ -971,9 +1149,54 @@ class _PostPageState extends State<PostPage> {
         );
       },
     );
-  }
+  } 
 
   // <CHANGE> Added dialog for canceling reservation
+  Future<void> _cancelReservation(int bookingId) async {
+    const storage = FlutterSecureStorage();
+    final token = await storage.read(key: 'token');
+
+    try {
+      final response = await http.patch(
+        Uri.parse('https://foodbridge1.onrender.com/bookings/$bookingId'),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+        body: jsonEncode({"status": "CANCELLED"}),
+      );
+
+      if (response.statusCode == 204) {
+        print("Booking cancelled successfully.");
+        if (mounted) {
+          await _checkDailyQuota();
+          setState(() {
+            userStatus = UserStatus.verifiedNoReservation;
+            reservationId = null;
+            currentBookingId = null;
+          });
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('ยกเลิกสิทธิ์แล้ว'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } else {
+        print("Failed to cancel booking: ${response.statusCode}");
+        print("Response: ${response.body}");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('เกิดข้อผิดพลาด: ${response.statusCode}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      print("Error cancelling booking: $e");
+    }
+  }
+
   void _showCancelReservationDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -1055,11 +1278,12 @@ class _PostPageState extends State<PostPage> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: () {
+                        onPressed: () async {
                           Navigator.pop(context);
-                          setState(() {
-                            userStatus = UserStatus.verifiedNoReservation;
-                          });
+                          await _cancelReservation(currentBookingId!); // Pass booking ID
+                          // setState(() {
+                          //   userStatus = UserStatus.verifiedNoReservation;
+                          // });
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('ยกเลิกสิทธิ์แล้ว'),
@@ -1092,5 +1316,7 @@ class _PostPageState extends State<PostPage> {
         );
       },
     );
-  }
-}
+  } 
+
+
+} // End of PostPage class
