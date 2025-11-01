@@ -3,6 +3,7 @@ import 'package:foodbridgeapp/screens/login_page.dart';
 import 'register_page.dart';
 import 'home_page.dart';
 import 'post_page.dart';
+import 'history_order_page.dart';
 
 class TemporaryScreen extends StatelessWidget {
   const TemporaryScreen({super.key});
@@ -23,7 +24,7 @@ class TemporaryScreen extends StatelessWidget {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const LoginPage()),
+                  MaterialPageRoute(builder: (_) => LoginPage()),
                 );
               },
               child: const Text('Login'),
@@ -32,7 +33,7 @@ class TemporaryScreen extends StatelessWidget {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const RegisterPage()),
+                  MaterialPageRoute(builder: (_) => RegisterPage()),
                 );
               },
               child: const Text('Register'),
@@ -50,10 +51,19 @@ class TemporaryScreen extends StatelessWidget {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const PostPage()),
+                  MaterialPageRoute(builder: (_) => PostPage()),
                 );
               },
               child: const Text('Post'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => HistoryOrderPage()),
+                );
+              },
+              child: const Text('History Order'),
             ),
           ],
         ),
