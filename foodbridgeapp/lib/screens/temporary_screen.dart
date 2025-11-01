@@ -25,7 +25,7 @@ class TemporaryScreen extends StatelessWidget {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const LoginPage()),
+                  MaterialPageRoute(builder: (_) => LoginPage()),
                 );
               },
               child: const Text('Login'),
@@ -34,7 +34,7 @@ class TemporaryScreen extends StatelessWidget {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const RegisterPage()),
+                  MaterialPageRoute(builder: (_) => RegisterPage()),
                 );
               },
               child: const Text('Register'),
@@ -52,7 +52,7 @@ class TemporaryScreen extends StatelessWidget {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const PostPage()),
+                  MaterialPageRoute(builder: (_) => PostPage()),
                 );
               },
               child: const Text('Post'),
