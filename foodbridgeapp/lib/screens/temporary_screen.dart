@@ -7,6 +7,7 @@ import 'edit_profile_page.dart';
 import 'profile_page.dart';
 import 'other_profile_page.dart';
 import 'setting_page.dart';
+import 'history_order_page.dart';
 
 class TemporaryScreen extends StatelessWidget {
   const TemporaryScreen({super.key});
@@ -27,7 +28,7 @@ class TemporaryScreen extends StatelessWidget {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const LoginPage()),
+                  MaterialPageRoute(builder: (_) => LoginPage()),
                 );
               },
               child: const Text('Login'),
@@ -36,7 +37,7 @@ class TemporaryScreen extends StatelessWidget {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const RegisterPage()),
+                  MaterialPageRoute(builder: (_) => RegisterPage()),
                 );
               },
               child: const Text('Register'),
@@ -54,7 +55,7 @@ class TemporaryScreen extends StatelessWidget {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const PostPage()),
+                  MaterialPageRoute(builder: (_) => PostPage()),
                 );
               },
               child: const Text('Post'),
@@ -90,10 +91,10 @@ class TemporaryScreen extends StatelessWidget {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const SettingsPage()),
+                  MaterialPageRoute(builder: (_) => HistoryOrderPage()),
                 );
               },
-              child: const Text('setting'),
+              child: const Text('History Order'),
             ),
           ],
         ),

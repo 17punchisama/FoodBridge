@@ -151,6 +151,8 @@ class _MapPickerPageState extends State<MapPickerPage> {
             ? const Text('กำลังยืนยัน...')
             : const Text('ยืนยันตำแหน่ง'),
         icon: const Icon(Icons.check),
+        backgroundColor: Colors.green[600],
+        foregroundColor: Colors.white,
       ),
     );
   }
