@@ -5,6 +5,7 @@ import 'home_page.dart';
 import 'post_page.dart';
 import 'edit_profile_page.dart';
 import 'profile_page.dart';
+import 'history_order_page.dart';
 
 class TemporaryScreen extends StatelessWidget {
   const TemporaryScreen({super.key});
@@ -74,6 +75,15 @@ class TemporaryScreen extends StatelessWidget {
                 );
               },
               child: const Text('Profile'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => HistoryOrderPage()),
+                );
+              },
+              child: const Text('History Order'),
             ),
           ],
         ),
