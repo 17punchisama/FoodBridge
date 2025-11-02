@@ -1,0 +1,461 @@
+import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:geocoding/geocoding.dart';
+import 'dart:async';
+
+class ViewMorePage extends StatefulWidget {
+  final String type;
+  final String ownerId;
+  const ViewMorePage({super.key, required this.type, required this.ownerId});
+
+  @override
+  State<ViewMorePage> createState() => _ViewMorePageState();
+}
+
+class _ViewMorePageState extends State<ViewMorePage> {
+  String selectedFilter = 'ทั้งหมด';
+  List<Map<String, String>> allPosts = [];
+  bool loadingPosts = true;
+  final _storage = const FlutterSecureStorage();
+  String? currentProvince;
+  LatLng? _currentUserPosition;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeData();
+  }
+
+  Future<void> _initializeData() async {
+    await _loadUserProvinceAndPosition();
+    await fetchAllPosts();
+  }
+
+  Future<void> _loadUserProvinceAndPosition() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return;
+    }
+
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      final placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+      setState(() {
+        currentProvince = placemarks.isNotEmpty
+            ? placemarks.first.administrativeArea ?? "No Where"
+            : "No Where";
+        _currentUserPosition = LatLng(position.latitude, position.longitude);
+      });
+    } catch (e) {
+      debugPrint("Error reverse geocoding: $e");
+      setState(() {
+        currentProvince = "No Where";
+        _currentUserPosition = LatLng(13.7563, 100.5018);
+      });
+    }
+  }
+
+  Future<String> _getDistanceText(double? lat, double? lng) async {
+    if (lat == null || lng == null || _currentUserPosition == null) return '- km';
+    final distance = Geolocator.distanceBetween(
+          _currentUserPosition!.latitude,
+          _currentUserPosition!.longitude,
+          lat,
+          lng,
+        ) /
+        1000;
+    return distance > 999 ? '999+ km' : "${distance.toStringAsFixed(2)} km";
+  }
+
+  Future<void> fetchAllPosts() async {
+    final token = await _storage.read(key: 'token');
+    if (token == null) return;
+
+    String apiUrl = '';
+    String postType = widget.type.toLowerCase(); // "free" / "sale" / "user"
+
+    if (postType == 'user') {
+      apiUrl = 'https://foodbridge1.onrender.com/users/${widget.ownerId}/posts';
+    } else {
+      apiUrl = 'https://foodbridge1.onrender.com/posts?status=CLOSED';
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse(apiUrl),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode != 200) {
+        debugPrint("❌ Failed to fetch posts: ${response.statusCode}");
+        setState(() => loadingPosts = false);
+        return;
+      }
+
+      final data = json.decode(response.body);
+      final List<dynamic> items = data['items'] ?? [];
+      List<Map<String, String>> postList = [];
+
+      for (final item in items) {
+        final bool isGiveaway = item['is_giveaway'] == true ||
+            item['is_giveaway'] == 'true';
+        if ((postType == 'free' && !isGiveaway) ||
+            (postType == 'sale' && isGiveaway)) continue;
+
+        final images = item['images'] ?? [];
+        final imageUrl = (images.isNotEmpty && images.first is String)
+            ? images.first
+            : 'https://genconnect.com.sg/cdn/shop/files/Display.jpg?v=1684741232&width=1445';
+
+        DateTime createdAtDate =
+            DateTime.tryParse(item['created_at'].toString()) ?? DateTime(0);
+
+        double? lat = (item['lat'] as num?)?.toDouble();
+        double? lng = (item['lng'] as num?)?.toDouble();
+        String kiloText = await _getDistanceText(lat, lng);
+
+        Map<String, dynamic> ownerData = {};
+        final ownerRes = await http.get(
+          Uri.parse('https://foodbridge1.onrender.com/users/${item['provider_id']}'),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+        if (ownerRes.statusCode == 200) {
+          ownerData = jsonDecode(ownerRes.body);
+        }
+
+        Map<String, dynamic> bookingData = {};
+        final bookingRes = await http.get(
+          Uri.parse('https://foodbridge1.onrender.com/bookings?post_id=${item['post_id']}'),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+        if (bookingRes.statusCode == 200) {
+          bookingData = jsonDecode(bookingRes.body);
+        }
+
+        String shop;
+        if (item['categories'] == null || item['categories'].isEmpty) {
+          shop = 'No categories';
+        } else {
+          shop = (item['categories'] as List).join(', ');
+        }
+
+        String queue = 'กำลังรอคิว - คน';
+        String leftQueue = '';
+        if (bookingData['receiver_count'] != null) {
+          queue = 'กำลังรอคิว ${bookingData['receiver_count']} คน';
+          if (item['quantity'] != null) {
+            leftQueue =
+                'คงเหลือ ${item['quantity'] - bookingData['receiver_count']} ที่';
+          }
+        }
+
+        bool isOpen = item['status'] == 'OPEN';
+
+        postList.add({
+          'image': imageUrl,
+          'title': item['title'] ?? '-',
+          'location': (item['address'] == null || item['address'].toString().isEmpty)
+              ? 'ไม่ระบุสถานที่'
+              : item['address'].toString(),
+          'kilo': kiloText,
+          'owner': ownerData['full_name']?.toString() ?? '-',
+          'created_at': createdAtDate.toIso8601String(),
+          'price': "฿${item['price'] ?? '-'}",
+          'queue': queue,
+          'left_queue': leftQueue,
+          'isOpen': isOpen.toString(),
+          'category': shop,
+        });
+      }
+
+      postList.sort((a, b) {
+        final dateA = DateTime.tryParse(a['created_at'] ?? '') ?? DateTime(0);
+        final dateB = DateTime.tryParse(b['created_at'] ?? '') ?? DateTime(0);
+        return dateB.compareTo(dateA);
+      });
+
+      setState(() {
+        allPosts = postList;
+        loadingPosts = false;
+      });
+    } catch (e) {
+      debugPrint("💥 Error fetching posts: $e");
+      setState(() => loadingPosts = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filteredGiveaways = allPosts.where((item) {
+      if (selectedFilter == 'ทั้งหมด') return true;
+      if (selectedFilter == 'เปิดจอง') return item['isOpen'] == 'true';
+      if (selectedFilter == 'ปิดจอง') return item['isOpen'] == 'false';
+      return true;
+    }).toList();
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F5),
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.white,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'รายการแจกฟรีใกล้คุณ',
+              style: TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(Icons.location_on, color: Colors.black54, size: 18),
+                SizedBox(width: 4),
+                Text(
+                  'อ้างอิงจากสถานที่ของคุณ : ',
+                  style: TextStyle(fontSize: 13, color: Colors.black54),
+                ),
+                Flexible(
+                  child: Text(
+                    currentProvince ?? 'Unknown',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.black,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        centerTitle: false,
+      ),
+      body: loadingPosts
+          ? const Center(child: CircularProgressIndicator())
+          : Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: filteredGiveaways.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'ไม่มีรายการในตอนนี้ 😅',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: filteredGiveaways.length,
+                            itemBuilder: (context, index) {
+                              final item = filteredGiveaways[index];
+                              return GiveawayCard(
+                                imageUrl: item['image'] ?? '',
+                                title: item['title'] ?? '-',
+                                kilo: item['kilo'] ?? '- km',
+                                owner: item['owner'] ?? '-',
+                                leftQueue: item['left_queue'] ?? '',
+                                queue: item['queue'] ?? '',
+                                category: item['category'] ?? '',
+                                isOpen: item['isOpen'] == 'true',
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+}
+
+class GiveawayCard extends StatelessWidget {
+  final String imageUrl;
+  final String title;
+  final String kilo;
+  final String owner;
+  final String leftQueue;
+  final String queue;
+  final String category;
+  final bool isOpen;
+
+  const GiveawayCard({
+    super.key,
+    required this.imageUrl,
+    required this.title,
+    required this.kilo,
+    required this.owner,
+    required this.leftQueue,
+    required this.queue,
+    required this.category,
+    required this.isOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      color: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.network(
+                imageUrl,
+                width: 90,
+                height: 70,
+                fit: BoxFit.cover,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isOpen
+                              ? Colors.green.shade100
+                              : Colors.red[100],
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          isOpen ? 'เปิดจอง' : 'ปิดจอง',
+                          style: TextStyle(
+                            color: isOpen ? Colors.green : Colors.red,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      SvgPicture.asset('assets/icons/bike.svg', width: 10, height: 10),
+                      const SizedBox(width: 3),
+                      Text(
+                        kilo,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Colors.black54,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      SvgPicture.asset('assets/icons/owner.svg', width: 10, height: 10),
+                      const SizedBox(width: 3),
+                      Text(
+                        owner,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Colors.black54,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.red[400],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          category,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        leftQueue,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.orange,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.orange[200],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          queue,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.orange,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
