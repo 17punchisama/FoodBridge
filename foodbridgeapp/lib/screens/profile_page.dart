@@ -2,6 +2,10 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:foodbridgeapp/verified_service.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:async';
 import 'edit_profile_page.dart';
@@ -39,16 +43,22 @@ class _ProfilePageState extends State<ProfilePage> {
   List<Map<String, dynamic>> bookings = [];
   List<Map<String, String>> allPosts = [];
   bool loadingPosts = true;
+  String? currentProvince;
+  LatLng? _currentUserPosition;
 
   @override
   void initState() {
     super.initState();
-    _loadUser().then((_) {
-      fetchAllPosts();
-    });
-    _loadDailyLimit();
-    _loadSuccess();
-    _loadBookings();
+    _initializeProfile();
+  }
+
+  Future<void> _initializeProfile() async {
+    await _loadUserProvinceAndPosition(); // cache user position first
+    await _loadUser(); // then load user data
+    await fetchAllPosts(); // now safe to calculate distances
+    await _loadDailyLimit();
+    await _loadSuccess();
+    await _loadBookings();
   }
 
   Future<void> _loadUser() async {
@@ -179,65 +189,159 @@ class _ProfilePageState extends State<ProfilePage> {
     });
   }
 
+  Future<void> _loadUserProvinceAndPosition() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    // Check if location services are enabled
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      debugPrint('❌ Location services are disabled.');
+      return null;
+    }
+
+    // Check permission
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        debugPrint('❌ Location permission denied.');
+        return null;
+      }
+    }
+
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      final placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+      if (placemarks.isNotEmpty) {
+        setState(() {
+          currentProvince = placemarks.first.administrativeArea ?? "No Where";
+          _currentUserPosition = LatLng(position.latitude, position.longitude);
+        });
+      } else {
+        setState(() {
+          currentProvince = "No Where";
+          _currentUserPosition = LatLng(position.latitude, position.longitude);
+        });
+      }
+    } catch (e) {
+      print("Error reverse geocoding: $e");
+      setState(() {
+        currentProvince = "No Where";
+        _currentUserPosition = LatLng(13.7563, 100.5018);
+      });
+    }
+  }
+
+  Future<double?> calculateDistance(double postLat, double postLng) async {
+    if (_currentUserPosition == null) return null;
+    // Calculate distance
+    final distanceInMeters = Geolocator.distanceBetween(
+      _currentUserPosition!.latitude,
+      _currentUserPosition!.longitude,
+      postLat,
+      postLng,
+    );
+
+    final distanceKm = distanceInMeters / 1000; // convert to km
+
+    debugPrint('📍 Post: $postLat, $postLng');
+    debugPrint(
+      '📍 Current: ${_currentUserPosition!.latitude}, ${_currentUserPosition!.longitude}',
+    );
+    debugPrint('📏 Distance: ${distanceKm.toStringAsFixed(2)} km');
+
+    return distanceKm;
+  }
+
   Future<void> fetchAllPosts() async {
-    final _storage = const FlutterSecureStorage();
     final token = await _storage.read(key: 'token');
     if (token == null) return;
 
     try {
-      final userId =
-          userData?['user_id']
-              as int; // or int.parse(userData?['user_id'] ?? '0')
-      final urls = ['https://foodbridge1.onrender.com/users/$userId/posts'];
-
-      final responses = await Future.wait(
-        urls.map(
-          (url) => http.get(
-            Uri.parse(url),
-            headers: {'Authorization': 'Bearer $token'},
-          ),
+      final response = await http.get(
+        Uri.parse(
+          'https://foodbridge1.onrender.com/users/${userData?['user_id']}/posts',
         ),
+        headers: {'Authorization': 'Bearer $token'},
       );
 
-      List<dynamic> allItems = [];
-      for (var res in responses) {
-        if (res.statusCode == 200) {
-          final data = json.decode(res.body);
-          allItems.addAll(data['items']);
-        }
+      if (response.statusCode != 200) {
+        debugPrint("Failed to fetch posts: ${response.statusCode}");
+        setState(() => loadingPosts = false);
+        return;
       }
 
-      // map to UI format
-      final mergedPosts = allItems.map<Map<String, String>>((item) {
-        final images = (item['images'] as List?) ?? [];
+      final data = json.decode(response.body);
+      final List<dynamic> items = data['items'] ?? [];
+
+      final futures = items.map<Future<Map<String, String>>>((item) async {
+        final images = item['images'] ?? [];
+        final imageUrl = (images.isNotEmpty && images.first is String)
+            ? images.first as String
+            : 'https://genconnect.com.sg/cdn/shop/files/Display.jpg?v=1684741232&width=1445';
+
+        final createdAt = item['created_at'];
+        DateTime createdAtDate;
+        if (createdAt is int) {
+          createdAtDate = DateTime.fromMillisecondsSinceEpoch(createdAt * 1000);
+        } else if (createdAt is String) {
+          createdAtDate = DateTime.tryParse(createdAt) ?? DateTime(0);
+        } else {
+          createdAtDate = DateTime(0);
+        }
+
+        double? lat = item['lat'];
+        double? lng = item['lng'];
+
+        String kiloText;
+        double? distance;
+
+        if (lat == null || lng == null) {
+          kiloText = '- km';
+        } else {
+          final postLat = lat.toDouble();
+          final postLng = lng.toDouble();
+
+          distance = await calculateDistance(postLat, postLng);
+          if (distance == null) {
+            kiloText = '- km';
+          } else {
+            final clampedDistance = distance > 999 ? 999 : distance;
+            kiloText = distance > 999
+                ? '999+ km'
+                : "${clampedDistance.toStringAsFixed(2)} km";
+          }
+        }
+        print("kilitext: $kiloText");
+        print("distancekm: $distance");
+
         return {
-          'image': images.isNotEmpty
-              ? images.first
-              : 'https://www.shutterstock.com/image-vector/avatar-gender-neutral-silhouette-vector-600nw-2470054311.jpg',
-          // 'image': 'assets/images/dessert_img.png',
+          // 'id': item['post_id'],
+          'image': imageUrl,
           'title': item['title'] ?? 'ไม่ระบุชื่อโพสต์',
-          'location': item['address'] ?? 'ไม่ระบุสถานที่',
-          'kilo': '0.0 km',
+          'location': (item['address'] == null || item['address'].toString().isEmpty)
+              ? 'ไม่ระบุสถานที่'
+              : item['address'],
+          'kilo': kiloText,
           'owner': userData?['full_name'] ?? "Unknown",
+          'created_at': createdAtDate.toIso8601String(),
         };
       }).toList();
 
+      // Wait all
+      final mergedPosts = await Future.wait(futures);
+
+      // 🕒 sort newest first
       mergedPosts.sort((a, b) {
-        final createdA =
-            (allItems.firstWhere(
-                      (e) => e['title'] == a['title'],
-                      orElse: () => {'created_at': 0},
-                    )['created_at'] ??
-                    0)
-                as int;
-        final createdB =
-            (allItems.firstWhere(
-                      (e) => e['title'] == b['title'],
-                      orElse: () => {'created_at': 0},
-                    )['created_at'] ??
-                    0)
-                as int;
-        return createdB.compareTo(createdA);
+        final dateA = DateTime.tryParse(a['created_at'] ?? '') ?? DateTime(0);
+        final dateB = DateTime.tryParse(b['created_at'] ?? '') ?? DateTime(0);
+        return dateB.compareTo(dateA);
       });
 
       setState(() {
@@ -270,7 +374,9 @@ class _ProfilePageState extends State<ProfilePage> {
     }
 
     final fullName = userData!['full_name'] ?? 'Username';
-    final province = userData!['province'] ?? 'Bangkok, Thailand';
+    // final province = userData!['province'] ?? 'Bangkok, Thailand';
+    final province = currentProvince ?? 'Loading...';
+    print("province: $province");
 
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 244, 243, 243),
@@ -288,14 +394,12 @@ class _ProfilePageState extends State<ProfilePage> {
                     CircleAvatar(
                       radius: 35,
                       backgroundColor: Colors.grey[200],
-                      backgroundImage:
-                          (userData?['avatar_url'] != null
-                                  ? NetworkImage(userData!['avatar_url'])
-                                  : null)
-                              as ImageProvider<Object>?,
+                      backgroundImage: (userData?['avatar_url'] != null
+                          ? NetworkImage(userData!['avatar_url'])
+                          : null),
                       child: userData?['avatar_url'] == null
                           ? SvgPicture.asset(
-                              'assets/icons/no_profile.svg',
+                              'assets/images/profile1.png',
                               width: 180,
                               height: 180,
                             )
@@ -309,23 +413,31 @@ class _ProfilePageState extends State<ProfilePage> {
                           mainAxisAlignment: MainAxisAlignment.start,
                           children: [
                             Text(
-                              fullName ?? 'Unknown', 
+                              fullName ?? 'Unknown',
                               style: const TextStyle(
                                 fontSize: 22,
                                 fontWeight: FontWeight.bold,
-                              )
+                              ),
                             ),
                             if (userData?['is_vertify'] == true)
                               const Padding(
                                 padding: EdgeInsets.only(left: 6),
-                                child: Icon(Icons.verified, color: Colors.orange, size: 22),
+                                child: Icon(
+                                  Icons.verified,
+                                  color: Colors.orange,
+                                  size: 22,
+                                ),
                               ),
                           ],
                         ),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.start,
                           children: [
-                            const Icon(Icons.location_on, color: Colors.red, size: 20),
+                            const Icon(
+                              Icons.location_on,
+                              color: Colors.red,
+                              size: 20,
+                            ),
                             const SizedBox(width: 2),
                             Text(
                               province,
@@ -380,7 +492,6 @@ class _ProfilePageState extends State<ProfilePage> {
             //     ),
             //   ],
             // ),
-
             const SizedBox(height: 16),
             // 💡 Daily Limit Box
             Container(
@@ -655,11 +766,16 @@ class PreviewPostBox extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                  SizedBox(
+                    width: 125,
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
                   Text(
@@ -712,7 +828,7 @@ class CountdownBox extends StatelessWidget {
     if (d.inHours > 0) {
       return "${d.inHours}:${(d.inMinutes % 60).toString().padLeft(2, '0')}:${(d.inSeconds % 60).toString().padLeft(2, '0')}";
     } else {
-      return "00:${d.inMinutes}.toString().padLeft(2,'0'):${(d.inSeconds % 60).toString().padLeft(2, '0')}";
+      return "00:${(d.inMinutes % 60).toString().padLeft(2, '0')}:${(d.inSeconds % 60).toString().padLeft(2, '0')}";
     }
   }
 

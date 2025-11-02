@@ -4,10 +4,28 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:foodbridgeapp/verified_service.dart';
+import 'package:geocoding/geocoding.dart';
 import 'dart:async';
 import 'post_page.dart';
 import 'nav_bar.dart';
 import 'profile_page.dart';
+
+String formatKilo(String? kiloText) {
+  if (kiloText == null || kiloText.isEmpty) return '-';
+
+  // strip " km" and try parse
+  final numPart = double.tryParse(kiloText.replaceAll(' km', '').trim());
+  if (numPart == null) return kiloText;
+
+  if (numPart > 999) {
+    return '999+ km';
+  } else {
+    return '${numPart.toStringAsFixed(0)} km';
+  }
+}
 
 class OtherProfilePage extends StatefulWidget {
   final int userId;
@@ -23,13 +41,20 @@ class _OtherProfilePageState extends State<OtherProfilePage> {
   List<Map<String, String>> allPosts = [];
   bool loadingPosts = true;
   final _storage = const FlutterSecureStorage();
+  String? currentProvince;
+  LatLng? _currentUserPosition;
 
   @override
   void initState() {
     super.initState();
-    fetchUserData();
-    fetchAllPosts();
-    _loadSuccess();
+    _initializeProfile();
+  }
+
+  Future<void> _initializeProfile() async {
+    await _loadUserProvinceAndPosition(); // cache user position first
+    await fetchUserData();
+    await fetchAllPosts();
+    await _loadSuccess();
   }
 
   Future<void> fetchUserData() async {
@@ -72,65 +97,160 @@ class _OtherProfilePageState extends State<OtherProfilePage> {
     }
   }
 
+  Future<void> _loadUserProvinceAndPosition() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    // Check if location services are enabled
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      debugPrint('❌ Location services are disabled.');
+      return null;
+    }
+
+    // Check permission
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        debugPrint('❌ Location permission denied.');
+        return null;
+      }
+    }
+
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      final placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+      if (placemarks.isNotEmpty) {
+        setState(() {
+          currentProvince = placemarks.first.administrativeArea ?? "No Where";
+          _currentUserPosition = LatLng(position.latitude, position.longitude);
+        });
+      } else {
+        setState(() {
+          currentProvince = "No Where";
+          _currentUserPosition = LatLng(position.latitude, position.longitude);
+        });
+      }
+    } catch (e) {
+      print("Error reverse geocoding: $e");
+      setState(() {
+        currentProvince = "No Where";
+        _currentUserPosition = LatLng(13.7563, 100.5018);
+      });
+    }
+  }
+
+  Future<double?> calculateDistance(double postLat, double postLng) async {
+    if (_currentUserPosition == null) return null;
+    // Calculate distance
+    final distanceInMeters = Geolocator.distanceBetween(
+      _currentUserPosition!.latitude,
+      _currentUserPosition!.longitude,
+      postLat,
+      postLng,
+    );
+
+    final distanceKm = distanceInMeters / 1000; // convert to km
+
+    debugPrint('📍 Post: $postLat, $postLng');
+    debugPrint(
+      '📍 Current: ${_currentUserPosition!.latitude}, ${_currentUserPosition!.longitude}',
+    );
+    debugPrint('📏 Distance: ${distanceKm.toStringAsFixed(2)} km');
+
+    return distanceKm;
+  }
+
   Future<void> fetchAllPosts() async {
-    final _storage = const FlutterSecureStorage();
     final token = await _storage.read(key: 'token');
     if (token == null) return;
 
     try {
-      final urls = [
-        'https://foodbridge1.onrender.com/users/${widget.userId}/posts',
-      ];
-
-      final responses = await Future.wait(
-        urls.map(
-          (url) => http.get(
-            Uri.parse(url),
-            headers: {'Authorization': 'Bearer $token'},
-          ),
+      final response = await http.get(
+        Uri.parse(
+          'https://foodbridge1.onrender.com/users/${widget.userId}/posts',
         ),
+        headers: {'Authorization': 'Bearer $token'},
       );
 
-      List<dynamic> allItems = [];
-      for (var res in responses) {
-        if (res.statusCode == 200) {
-          final data = json.decode(res.body);
-          allItems.addAll(data['items']);
-        }
+      if (response.statusCode != 200) {
+        debugPrint("Failed to fetch posts: ${response.statusCode}");
+        setState(() => loadingPosts = false);
+        return;
       }
 
-      // map to UI format
-      final mergedPosts = allItems.map<Map<String, String>>((item) {
-        final images = (item['images'] as List?) ?? [];
-        print("address: ${item['address']}");
+      final data = json.decode(response.body);
+      final List<dynamic> items = data['items'] ?? [];
+
+      final futures = items.map<Future<Map<String, String>>>((item) async {
+        final images = item['images'] ?? [];
+        final imageUrl = (images.isNotEmpty && images.first is String)
+            ? images.first as String
+            : 'https://genconnect.com.sg/cdn/shop/files/Display.jpg?v=1684741232&width=1445';
+
+        final createdAt = item['created_at'];
+        DateTime createdAtDate;
+        if (createdAt is int) {
+          createdAtDate = DateTime.fromMillisecondsSinceEpoch(createdAt * 1000);
+        } else if (createdAt is String) {
+          createdAtDate = DateTime.tryParse(createdAt) ?? DateTime(0);
+        } else {
+          createdAtDate = DateTime(0);
+        }
+
+        double? lat = item['lat'];
+        double? lng = item['lng'];
+
+        String kiloText;
+        double? distance;
+
+        if (lat == null || lng == null) {
+          kiloText = '- km';
+        } else {
+          final postLat = lat.toDouble();
+          final postLng = lng.toDouble();
+
+          distance = await calculateDistance(postLat, postLng);
+          if (distance == null) {
+            kiloText = '- km';
+          } else {
+            final clampedDistance = distance > 999 ? 999 : distance;
+            kiloText = distance > 999
+                ? '999+ km'
+                : "${clampedDistance.toStringAsFixed(2)} km";
+          }
+        }
+        print("kilitext: $kiloText");
+        print("distancekm: $distance");
+
         return {
-          'image': images.isNotEmpty
-              ? images.first
-              : 'assets/images/dessert_img.png',
-          // 'image': 'assets/images/dessert_img.png',
+          // 'id': item['post_id'],
+          'image': imageUrl,
           'title': item['title'] ?? 'ไม่ระบุชื่อโพสต์',
-          'location': item['address'] ?? 'ไม่ระบุสถานที่',
-          'kilo': '0.0 km',
+          'location':
+              (item['address'] == null || item['address'].toString().isEmpty)
+              ? 'ไม่ระบุสถานที่'
+              : item['address'],
+          'kilo': kiloText,
           'owner': userData?['full_name'] ?? "Unknown",
+          'created_at': createdAtDate.toIso8601String(),
         };
       }).toList();
 
+      // Wait all
+      final mergedPosts = await Future.wait(futures);
+
+      // 🕒 sort newest first
       mergedPosts.sort((a, b) {
-        final createdA =
-            (allItems.firstWhere(
-                      (e) => e['title'] == a['title'],
-                      orElse: () => {'created_at': 0},
-                    )['created_at'] ??
-                    0)
-                as int;
-        final createdB =
-            (allItems.firstWhere(
-                      (e) => e['title'] == b['title'],
-                      orElse: () => {'created_at': 0},
-                    )['created_at'] ??
-                    0)
-                as int;
-        return createdB.compareTo(createdA);
+        final dateA = DateTime.tryParse(a['created_at'] ?? '') ?? DateTime(0);
+        final dateB = DateTime.tryParse(b['created_at'] ?? '') ?? DateTime(0);
+        return dateB.compareTo(dateA);
       });
 
       setState(() {
@@ -375,6 +495,7 @@ class _ItemCard extends StatelessWidget {
       onTap: () {
         Navigator.push(
           context,
+          // MaterialPageRoute(builder: (_) => const PostPage(PostId: item['id'])),
           MaterialPageRoute(builder: (_) => const PostPage()),
         );
       },
@@ -411,6 +532,18 @@ class _ItemCard extends StatelessWidget {
       width: 160,
       height: 80,
       fit: BoxFit.cover,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+      },
+      errorBuilder: (context, error, stackTrace) {
+        return Image.network(
+          'https://genconnect.com.sg/cdn/shop/files/Display.jpg?v=1684741232&width=1445',
+          width: 160,
+          height: 80,
+          fit: BoxFit.cover,
+        );
+      },
     ),
   );
 
@@ -419,9 +552,14 @@ class _ItemCard extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          item['title']!,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        SizedBox(
+          width: 140, // or whatever width fits your layout
+          child: Text(
+            item['title']!,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          ),
         ),
         const SizedBox(height: 2),
         Row(
@@ -432,10 +570,14 @@ class _ItemCard extends StatelessWidget {
               height: 12,
             ),
             const SizedBox(width: 2),
-            Text(
-              item['location']!,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 10, color: Colors.black),
+            SizedBox(
+              width: 130, // or whatever width fits your layout
+              child: Text(
+                item['location']!,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                style: const TextStyle(fontSize: 10, color: Colors.black),
+              ),
             ),
           ],
         ),
@@ -445,6 +587,9 @@ class _ItemCard extends StatelessWidget {
             const SizedBox(width: 3),
             Text(
               item['kilo']!,
+              // double.tryParse(item['kilo']?.replaceAll(' km', '') ?? '0') != null
+              //     ? "${double.parse(item['kilo']!.replaceAll(' km', '')).clamp(0, 999).toStringAsFixed(0)} km"
+              //     : item['kilo']!,
               style: const TextStyle(fontSize: 10, color: Color(0xff828282)),
             ),
             const Padding(
@@ -458,6 +603,8 @@ class _ItemCard extends StatelessWidget {
             const SizedBox(width: 3),
             Text(
               item['owner']!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 10, color: Color(0xff828282)),
             ),
           ],
