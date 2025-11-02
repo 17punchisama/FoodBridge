@@ -13,6 +13,8 @@ import 'post_page.dart';
 import 'nav_bar.dart';
 import 'other_profile_page.dart';
 import 'setting_page.dart';
+import 'history_order_page.dart';
+import 'view_more_page.dart';
 
 String formatThaiDate(String isoDate) {
   final dt = DateTime.parse(isoDate).toLocal();
@@ -322,10 +324,11 @@ class _ProfilePageState extends State<ProfilePage> {
         print("distancekm: $distance");
 
         return {
-          'id': item['post_id'],
+          'id': item['post_id'].toString(),
           'image': imageUrl,
           'title': item['title'] ?? 'ไม่ระบุชื่อโพสต์',
-          'location': (item['address'] == null || item['address'].toString().isEmpty)
+          'location':
+              (item['address'] == null || item['address'].toString().isEmpty)
               ? 'ไม่ระบุสถานที่'
               : item['address'],
           'kilo': kiloText,
@@ -551,12 +554,14 @@ class _ProfilePageState extends State<ProfilePage> {
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
                 GestureDetector(
-                  // onTap: () {
-                  //   Navigator.push(
-                  //     context,
-                  //     MaterialPageRoute(builder: (_) => const PostPage()),
-                  //   );
-                  // },
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const HistoryOrderPage(),
+                      ),
+                    );
+                  },
                   child: const Text(
                     'ดูทั้งหมด',
                     style: TextStyle(fontSize: 16, color: Colors.black),
@@ -672,17 +677,30 @@ class _ProfilePageState extends State<ProfilePage> {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      Container(
-                        width: 25,
-                        height: 25,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFF58319),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.arrow_forward_ios,
-                          color: Colors.white,
-                          size: 12,
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ViewMorePage(
+                                type: 'user',
+                                ownerId: userData!['user_id'].toString(),
+                              ),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          width: 25,
+                          height: 25,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFF58319),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.arrow_forward_ios,
+                            color: Colors.white,
+                            size: 12,
+                          ),
                         ),
                       ),
                     ],

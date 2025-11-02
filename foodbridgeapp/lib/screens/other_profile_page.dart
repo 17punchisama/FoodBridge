@@ -12,6 +12,9 @@ import 'dart:async';
 import 'post_page.dart';
 import 'nav_bar.dart';
 import 'profile_page.dart';
+import 'view_more_page.dart';
+
+int? userIdUse;
 
 String formatKilo(String? kiloText) {
   if (kiloText == null || kiloText.isEmpty) return '-';
@@ -66,6 +69,8 @@ class _OtherProfilePageState extends State<OtherProfilePage> {
         Uri.parse('https://foodbridge1.onrender.com/users/${widget.userId}'),
         headers: {'Authorization': 'Bearer $token'},
       );
+
+      userIdUse = widget.userId;
 
       if (res.statusCode == 200) {
         setState(() => userData = json.decode(res.body));
@@ -418,23 +423,31 @@ class _HeaderRow extends StatelessWidget {
             name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-            ),
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
           ),
         ),
-        Container(
-          width: 25,
-          height: 25,
-          decoration: const BoxDecoration(
-            color: Color(0xFFF58319),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(
-            Icons.arrow_forward_ios,
-            color: Color.fromARGB(255, 244, 243, 243),
-            size: 12,
+        GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) =>
+                    ViewMorePage(type: 'user', ownerId: userIdUse.toString()),
+              ),
+            );
+          },
+          child: Container(
+            width: 25,
+            height: 25,
+            decoration: const BoxDecoration(
+              color: Color(0xFFF58319),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.arrow_forward_ios,
+              color: Colors.white,
+              size: 12,
+            ),
           ),
         ),
       ],
@@ -502,7 +515,9 @@ class _ItemCard extends StatelessWidget {
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => PostPage(postId: int.parse(item['id']!))),
+          MaterialPageRoute(
+            builder: (_) => PostPage(postId: int.parse(item['id']!)),
+          ),
           // MaterialPageRoute(builder: (_) => const PostPage()),
         );
       },
