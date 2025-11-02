@@ -88,103 +88,101 @@ class _ViewMorePageState extends State<ViewMorePage> {
     final token = await _storage.read(key: 'token');
     if (token == null) return;
 
-    String apiUrl = '';
+    List<String> apiUrls = [];
     String postType = widget.type.toLowerCase(); // "free" / "sale" / "user"
 
     if (postType == 'user') {
-      apiUrl = 'https://foodbridge1.onrender.com/users/${widget.ownerId}/posts';
+      apiUrls = ['https://foodbridge1.onrender.com/users/${widget.ownerId}/posts'];
     } else {
-      apiUrl = 'https://foodbridge1.onrender.com/posts?status=CLOSED';
+      apiUrls = [
+        'https://foodbridge1.onrender.com/posts?status=CLOSED',
+        'https://foodbridge1.onrender.com/posts'
+      ];
     }
 
+    List<Map<String, String>> postList = [];
+
     try {
-      final response = await http.get(
-        Uri.parse(apiUrl),
-        headers: {'Authorization': 'Bearer $token'},
-      );
-
-      if (response.statusCode != 200) {
-        debugPrint("❌ Failed to fetch posts: ${response.statusCode}");
-        setState(() => loadingPosts = false);
-        return;
-      }
-
-      final data = json.decode(response.body);
-      final List<dynamic> items = data['items'] ?? [];
-      List<Map<String, String>> postList = [];
-
-      for (final item in items) {
-        final bool isGiveaway = item['is_giveaway'] == true ||
-            item['is_giveaway'] == 'true';
-        if ((postType == 'free' && !isGiveaway) ||
-            (postType == 'sale' && isGiveaway)) continue;
-
-        final images = item['images'] ?? [];
-        final imageUrl = (images.isNotEmpty && images.first is String)
-            ? images.first
-            : 'https://genconnect.com.sg/cdn/shop/files/Display.jpg?v=1684741232&width=1445';
-
-        DateTime createdAtDate =
-            DateTime.tryParse(item['created_at'].toString()) ?? DateTime(0);
-
-        double? lat = (item['lat'] as num?)?.toDouble();
-        double? lng = (item['lng'] as num?)?.toDouble();
-        String kiloText = await _getDistanceText(lat, lng);
-
-        Map<String, dynamic> ownerData = {};
-        final ownerRes = await http.get(
-          Uri.parse('https://foodbridge1.onrender.com/users/${item['provider_id']}'),
+      // Loop through all APIs
+      for (String url in apiUrls) {
+        final response = await http.get(
+          Uri.parse(url),
           headers: {'Authorization': 'Bearer $token'},
         );
-        if (ownerRes.statusCode == 200) {
-          ownerData = jsonDecode(ownerRes.body);
+
+        if (response.statusCode != 200) {
+          debugPrint("❌ Failed to fetch posts from $url : ${response.statusCode}");
+          continue; // skip this API
         }
 
-        Map<String, dynamic> bookingData = {};
-        final bookingRes = await http.get(
-          Uri.parse('https://foodbridge1.onrender.com/bookings?post_id=${item['post_id']}'),
-          headers: {'Authorization': 'Bearer $token'},
-        );
-        if (bookingRes.statusCode == 200) {
-          bookingData = jsonDecode(bookingRes.body);
-        }
+        final data = json.decode(response.body);
+        final List<dynamic> items = data['items'] ?? [];
 
-        String shop;
-        if (item['categories'] == null || item['categories'].isEmpty) {
-          shop = 'No categories';
-        } else {
-          shop = (item['categories'] as List).join(', ');
-        }
+        for (final item in items) {
+          final bool isGiveaway = item['is_giveaway'] == true || item['is_giveaway'] == 'true';
+          if ((postType == 'free' && !isGiveaway) || (postType == 'sale' && isGiveaway)) continue;
 
-        String queue = 'กำลังรอคิว - คน';
-        String leftQueue = '';
-        if (bookingData['receiver_count'] != null) {
-          queue = 'กำลังรอคิว ${bookingData['receiver_count']} คน';
-          if (item['quantity'] != null) {
-            leftQueue =
-                'คงเหลือ ${item['quantity'] - bookingData['receiver_count']} ที่';
+          final images = item['images'] ?? [];
+          final imageUrl = (images.isNotEmpty && images.first is String)
+              ? images.first
+              : 'https://genconnect.com.sg/cdn/shop/files/Display.jpg?v=1684741232&width=1445';
+
+          DateTime createdAtDate =
+              DateTime.tryParse(item['created_at'].toString()) ?? DateTime(0);
+
+          double? lat = (item['lat'] as num?)?.toDouble();
+          double? lng = (item['lng'] as num?)?.toDouble();
+          String kiloText = await _getDistanceText(lat, lng);
+
+          Map<String, dynamic> ownerData = {};
+          final ownerRes = await http.get(
+            Uri.parse('https://foodbridge1.onrender.com/users/${item['provider_id']}'),
+            headers: {'Authorization': 'Bearer $token'},
+          );
+          if (ownerRes.statusCode == 200) ownerData = jsonDecode(ownerRes.body);
+
+          Map<String, dynamic> bookingData = {};
+          final bookingRes = await http.get(
+            Uri.parse('https://foodbridge1.onrender.com/bookings?post_id=${item['post_id']}'),
+            headers: {'Authorization': 'Bearer $token'},
+          );
+          if (bookingRes.statusCode == 200) bookingData = jsonDecode(bookingRes.body);
+
+          String shop = (item['categories'] == null || item['categories'].isEmpty)
+              ? 'No categories'
+              : (item['categories'] as List).join(', ');
+
+          String queue = 'กำลังรอคิว - คน';
+          String leftQueue = '';
+          if (bookingData['receiver_count'] != null) {
+            queue = 'กำลังรอคิว ${bookingData['receiver_count']} คน';
+            if (item['quantity'] != null) {
+              leftQueue =
+                  'คงเหลือ ${item['quantity'] - bookingData['receiver_count']} ที่';
+            }
           }
+
+          bool isOpen = item['status'] == 'OPEN';
+
+          postList.add({
+            'image': imageUrl,
+            'title': item['title'] ?? '-',
+            'location': (item['address'] == null || item['address'].toString().isEmpty)
+                ? 'ไม่ระบุสถานที่'
+                : item['address'].toString(),
+            'kilo': kiloText,
+            'owner': ownerData['full_name']?.toString() ?? '-',
+            'created_at': createdAtDate.toIso8601String(),
+            'price': "฿${item['price'] ?? '-'}",
+            'queue': queue,
+            'left_queue': leftQueue,
+            'isOpen': isOpen.toString(),
+            'category': shop,
+          });
         }
-
-        bool isOpen = item['status'] == 'OPEN';
-
-        postList.add({
-          'image': imageUrl,
-          'title': item['title'] ?? '-',
-          'location': (item['address'] == null || item['address'].toString().isEmpty)
-              ? 'ไม่ระบุสถานที่'
-              : item['address'].toString(),
-          'kilo': kiloText,
-          'owner': ownerData['full_name']?.toString() ?? '-',
-          'created_at': createdAtDate.toIso8601String(),
-          'price': "฿${item['price'] ?? '-'}",
-          'queue': queue,
-          'left_queue': leftQueue,
-          'isOpen': isOpen.toString(),
-          'category': shop,
-        });
       }
 
+      // Sort by created_at descending
       postList.sort((a, b) {
         final dateA = DateTime.tryParse(a['created_at'] ?? '') ?? DateTime(0);
         final dateB = DateTime.tryParse(b['created_at'] ?? '') ?? DateTime(0);
@@ -200,6 +198,7 @@ class _ViewMorePageState extends State<ViewMorePage> {
       setState(() => loadingPosts = false);
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -324,138 +323,158 @@ class GiveawayCard extends StatelessWidget {
       elevation: 0,
       margin: const EdgeInsets.symmetric(vertical: 8),
       color: Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.network(
-                imageUrl,
-                width: 90,
-                height: 70,
-                fit: BoxFit.cover,
+      child: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    imageUrl,
+                    width: 100,
+                    height: 120,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              title,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          SvgPicture.asset('assets/icons/bike.svg', width: 10, height: 10),
+                          const SizedBox(width: 3),
+                          Text(
+                            kilo,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.black54,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          SvgPicture.asset('assets/icons/owner.svg', width: 10, height: 10),
+                          const SizedBox(width: 3),
+                          Text(
+                            owner,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.black54,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.red[400],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              category,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          // const SizedBox(width: 6),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              border: Border.all(color: Colors.orange),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              leftQueue,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.orange,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.orange,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              queue,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        
+                      ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            right: 10,
+            top: 10,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: isOpen ? Colors.green.shade100 : Colors.red[100],
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                isOpen ? 'เปิดจอง' : 'ปิดจอง',
+                style: TextStyle(
+                  color: isOpen ? Colors.green : Colors.red,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          title,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isOpen
-                              ? Colors.green.shade100
-                              : Colors.red[100],
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          isOpen ? 'เปิดจอง' : 'ปิดจอง',
-                          style: TextStyle(
-                            color: isOpen ? Colors.green : Colors.red,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      SvgPicture.asset('assets/icons/bike.svg', width: 10, height: 10),
-                      const SizedBox(width: 3),
-                      Text(
-                        kilo,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: Colors.black54,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      SvgPicture.asset('assets/icons/owner.svg', width: 10, height: 10),
-                      const SizedBox(width: 3),
-                      Text(
-                        owner,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: Colors.black54,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.red[400],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          category,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        leftQueue,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.orange,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.orange[200],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          queue,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.orange,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
+      
     );
   }
 }
