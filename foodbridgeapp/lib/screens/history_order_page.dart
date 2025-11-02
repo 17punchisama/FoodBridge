@@ -1,18 +1,55 @@
-import 'package:flutter/material.dart';
 import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'nav_bar.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-/// -------------------------------
-/// Service เรียก API จริง
-/// -------------------------------
-class ApiService {
+// ของโปรเจกต์เธอเอง
+import 'nav_bar.dart';
+import 'show_history_detail_page.dart';
+
+/// ===========================================================
+/// 1) SERVICE: เอา token จาก storage + /me
+/// ===========================================================
+class VerifiedService {
+  static const _storage = FlutterSecureStorage();
+  static const _tokenKey = 'token';
+
+  static Future<String?> getToken() async {
+    return await _storage.read(key: _tokenKey);
+  }
+
+  /// คืนเป็น map ของ user เช่น { "user_id": 9, "email": "...", ... }
+  static Future<Map<String, dynamic>?> getCurrentUser() async {
+    final token = await getToken();
+    if (token == null) return null;
+
+    final res = await http.get(
+      Uri.parse('https://foodbridge1.onrender.com/me'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    }
+    return null;
+  }
+}
+
+/// ===========================================================
+/// 2) API SERVICE สำหรับ history/booking
+/// ===========================================================
+class HistoryApiService {
   static const String baseUrl = 'https://foodbridge1.onrender.com';
 
-  /// 1) GET /bookings
-  static Future<List<dynamic>> getBookings(String token) async {
-    final url = Uri.parse('$baseUrl/bookings');
+  /// GET /bookings?receiver_user_id=...
+  static Future<List<Map<String, dynamic>>> getBookings(
+    String token,
+    int receiverUserId,
+  ) async {
+    final url = Uri.parse(
+      '$baseUrl/bookings?receiver_user_id=$receiverUserId',
+    );
 
     final res = await http.get(
       url,
@@ -25,17 +62,30 @@ class ApiService {
     if (res.statusCode == 200) {
       final data = jsonDecode(res.body);
 
-      if (data is List) return data;
-      if (data is Map && data['data'] is List) return data['data'];
+      // เคสปกติ
+      if (data is Map && data['items'] is List) {
+        return (data['items'] as List)
+            .map<Map<String, dynamic>>(
+              (e) => Map<String, dynamic>.from(e as Map),
+            )
+            .toList();
+      }
+
+      // เผื่อ backend ส่งเป็น list ตรงๆ
+      if (data is List) {
+        return data.map<Map<String, dynamic>>((e) {
+          return Map<String, dynamic>.from(e as Map);
+        }).toList();
+      }
 
       return [];
     } else {
-      print('getBookings error: ${res.statusCode} ${res.body}');
+      debugPrint('getBookings error: ${res.statusCode} ${res.body}');
       return [];
     }
   }
 
-  /// 2) GET /posts/{postId} → ดึงเฉพาะ price, is_giveaway, address
+  /// GET /posts/:postId → เอาไว้ดึงชื่อโพสต์ ราคา ที่อยู่ is_giveaway ฯลฯ
   static Future<Map<String, dynamic>?> getPostDetails(
     String token,
     int postId,
@@ -51,67 +101,61 @@ class ApiService {
     );
 
     if (res.statusCode == 200) {
-      final data = jsonDecode(res.body);
+      final raw = jsonDecode(res.body);
 
-      final map = (data is Map && data['data'] is Map)
-          ? data['data'] as Map<String, dynamic>
-          : data as Map<String, dynamic>;
+      // แบบ 1: ส่งมาเป็น object ตรงๆ
+      if (raw is Map && raw['post_id'] != null) {
+        return raw as Map<String, dynamic>;
+      }
 
-      return {
-        'title': map['title'],
-        'price': map['price'],
-        'is_giveaway': map['is_giveaway'],
-        'address': map['address'],
-      };
+      // แบบ 2: ห่อใน data
+      if (raw is Map && raw['data'] is Map) {
+        return raw['data'] as Map<String, dynamic>;
+      }
+
+      if (raw is Map<String, dynamic>) {
+        return raw;
+      }
+
+      return null;
     } else {
-      print('getPostDetails error: ${res.statusCode} ${res.body}');
+      debugPrint('getPostDetails error: ${res.statusCode} ${res.body}');
       return null;
     }
   }
 
-  /// 3) ดึง bookings แล้ว “ผูก” post ของแต่ละ booking มาให้เลย
-  ///
-  /// ผลลัพธ์แต่ละตัวจะหน้าตาประมาณนี้
-  /// {
-  ///   ...bookingFields,
-  ///   "post": {
-  ///     "price": ...,
-  ///     "is_giveaway": ...,
-  ///     "address": ...
-  ///   }
-  /// }
+  /// ดึง booking แล้วผูก post ให้แต่ละตัว
   static Future<List<Map<String, dynamic>>> getBookingsWithPost(
     String token,
+    int receiverUserId,
   ) async {
-    final bookings = await getBookings(token);
+    final bookings = await getBookings(token, receiverUserId);
 
-    // ดึง post ของแต่ละ booking แบบขนาน (parallel) ด้วย Future.wait
+    // ทำ parallel ทีละ booking
     final futures = bookings.map<Future<Map<String, dynamic>>>((b) async {
-      final postId = b['post_id'];
+      final rawPostId = b['post_id'];
       Map<String, dynamic>? postData;
 
-      if (postId != null) {
-        postData = await getPostDetails(
-          token,
-          postId is int ? postId : int.parse(postId.toString()),
-        );
+      if (rawPostId != null) {
+        final int postId = rawPostId is int
+            ? rawPostId
+            : int.tryParse(rawPostId.toString()) ?? 0;
+
+        if (postId != 0) {
+          postData = await getPostDetails(token, postId);
+        }
       }
 
-      // รวม booking เดิม + field post
-      return {
-        ...Map<String, dynamic>.from(b),
-        'post': postData, // อาจเป็น null ถ้าเรียกไม่สำเร็จ
-      };
+      return {...b, 'post': postData};
     }).toList();
 
-    final combined = await Future.wait(futures);
-    return combined;
+    return await Future.wait(futures);
   }
 }
 
-/// -------------------------------
-/// หน้า History
-/// -------------------------------
+/// ===========================================================
+/// 3) HISTORY PAGE หลัก
+/// ===========================================================
 class HistoryOrderPage extends StatefulWidget {
   const HistoryOrderPage({super.key});
 
@@ -125,13 +169,42 @@ class _HistoryOrderPageState extends State<HistoryOrderPage> {
   @override
   void initState() {
     super.initState();
+    _future = _load();
+  }
 
-    // 👇 token ที่คุณ mock ไว้
-    const hardcodedToken =
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NjIyMjc0MDksInJvbGUiOiJVU0VSIiwidWlkIjoyfQ.wgxcI6YlrWBQS0TILjijFUygE4X_ZTz1OcU8T632Ru0';
+  Future<List<Map<String, dynamic>>> _load() async {
+    // 1) เอา token
+    final token = await VerifiedService.getToken();
+    if (token == null) {
+      throw Exception('ยังไม่ได้ล็อกอิน');
+    }
 
-    // ใช้ฟังก์ชันที่ดึงทั้ง booking + post
-    _future = ApiService.getBookingsWithPost(hardcodedToken);
+    // 2) เอา /me ก่อนเพื่อรู้ id
+    final me = await VerifiedService.getCurrentUser();
+    if (me == null) {
+      throw Exception('โหลดข้อมูลผู้ใช้ไม่สำเร็จ');
+    }
+
+    // ปกติ backend จะส่ง user_id, แต่ถ้าเธอใช้ "id" ก็ลองทั้งคู่
+    final dynamic rawId = me['user_id'] ?? me['id'];
+    if (rawId == null) {
+      throw Exception('ไม่พบ user id ใน /me');
+    }
+
+    final int receiverUserId =
+        rawId is int ? rawId : int.tryParse(rawId.toString()) ?? 0;
+
+    if (receiverUserId == 0) {
+      throw Exception('user id ไม่ถูกต้อง');
+    }
+
+    // 3) เอา id ไปยิง /bookings?receiver_user_id=...
+    final bookings = await HistoryApiService.getBookingsWithPost(
+      token,
+      receiverUserId,
+    );
+
+    return bookings;
   }
 
   @override
@@ -139,28 +212,38 @@ class _HistoryOrderPageState extends State<HistoryOrderPage> {
     return DefaultTabController(
       length: 3,
       child: Scaffold(
+        backgroundColor: Colors.white,
         bottomNavigationBar: NavBar(),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: Color(0xff2A2929),
+            ),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          title: const Text(
+            'ประวัติการทำรายการ',
+            style: TextStyle(
+              color: Color(0xff2A2929),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          centerTitle: true,
+        ),
         body: SafeArea(
+          top: false, // เรามี AppBar แล้ว
           child: Padding(
             padding: const EdgeInsets.only(left: 10, right: 10, top: 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Padding(padding: const EdgeInsets.only(left: 4), 
-                child: const Text(
-                  'ประวัติการทำรายการ',
-                  style: TextStyle(
-                    color: Color(0xff2A2929),
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  
-                  ),
-                ),
-                
-                ),
-                
-                const SizedBox(height: 16),
+                // ถ้าไม่อยากให้มี title ซ้ำกับ AppBar เอา block นี้ออกได้
 
+
+                // Tab header
                 const SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: TabBar(
@@ -187,6 +270,7 @@ class _HistoryOrderPageState extends State<HistoryOrderPage> {
                 ),
                 const SizedBox(height: 16),
 
+                // Content
                 Expanded(
                   child: FutureBuilder<List<Map<String, dynamic>>>(
                     future: _future,
@@ -196,12 +280,17 @@ class _HistoryOrderPageState extends State<HistoryOrderPage> {
                       }
 
                       if (snapshot.hasError) {
-                        return const Center(child: Text('โหลดข้อมูลไม่สำเร็จ'));
+                        return Center(
+                          child: Text(
+                            snapshot.error.toString(),
+                            textAlign: TextAlign.center,
+                          ),
+                        );
                       }
 
                       final all = snapshot.data ?? [];
 
-                      // แยกตาม status ที่ backend ส่งมา
+                      // แยกตาม status
                       final doing = all.where((e) {
                         final s = (e['status'] ?? '').toString().toUpperCase();
                         return s == 'PENDING' || s == 'QUEUED';
@@ -239,12 +328,41 @@ class _HistoryOrderPageState extends State<HistoryOrderPage> {
   }
 }
 
-/// -------------------------------
-/// Widget แสดงรายการในแต่ละแท็บ
-/// -------------------------------
+/// ===========================================================
+/// 4) LIST แต่ละแท็บ
+/// ===========================================================
 class _BookingList extends StatelessWidget {
   final List<Map<String, dynamic>> data;
   const _BookingList({required this.data});
+
+  String _formatThaiDateTime(String isoString) {
+    if (isoString.isEmpty) return '-';
+    try {
+      final dt = DateTime.parse(isoString).toLocal();
+      const thMonths = [
+        'ม.ค.',
+        'ก.พ.',
+        'มี.ค.',
+        'เม.ย.',
+        'พ.ค.',
+        'มิ.ย.',
+        'ก.ค.',
+        'ส.ค.',
+        'ก.ย.',
+        'ต.ค.',
+        'พ.ย.',
+        'ธ.ค.',
+      ];
+      final day = dt.day;
+      final monthName = thMonths[dt.month - 1];
+      final year2 = dt.year % 100;
+      final hh = dt.hour.toString().padLeft(2, '0');
+      final mm = dt.minute.toString().padLeft(2, '0');
+      return '$day $monthName $year2, $hh:$mm';
+    } catch (e) {
+      return isoString;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -258,68 +376,60 @@ class _BookingList extends StatelessWidget {
       itemBuilder: (context, index) {
         final item = data[index];
 
-        String formatThaiDateTime(String isoString) {
-          if (isoString.isEmpty) return '-';
-          try {
-            // แปลงจาก ISO → DateTime แล้วแปลงเป็น local (ไทย)
-            final dt = DateTime.parse(isoString).toLocal();
-
-            const thMonths = [
-              'ม.ค.',
-              'ก.พ.',
-              'มี.ค.',
-              'เม.ย.',
-              'พ.ค.',
-              'มิ.ย.',
-              'ก.ค.',
-              'ส.ค.',
-              'ก.ย.',
-              'ต.ค.',
-              'พ.ย.',
-              'ธ.ค.',
-            ];
-
-            final day = dt.day; // 31
-            final monthName = thMonths[dt.month - 1]; // ต.ค.
-            final year2 = dt.year % 100; // 25
-            final hh = dt.hour.toString().padLeft(2, '0');
-            final mm = dt.minute.toString().padLeft(2, '0');
-
-            return '$day $monthName $year2, $hh:$mm';
-          } catch (e) {
-            return isoString; // ถ้า parse ไม่ได้ ก็ส่งเดิมกลับไป
-          }
-        }
-
         final bookingId = item['booking_id']?.toString() ?? '-';
-        final postId = item['post_id']?.toString() ?? '-';
+        final postIdRaw = item['post_id'];
+        final int postId = postIdRaw is int
+            ? postIdRaw
+            : int.tryParse(postIdRaw.toString()) ?? 0;
+
         final status = (item['status'] ?? '').toString();
         final createdAtRaw = item['created_at']?.toString() ?? '';
-        final createdAt = formatThaiDateTime(createdAtRaw);
+        final createdAt = _formatThaiDateTime(createdAtRaw);
 
-        // 👇 post ที่ดึงมาเพิ่ม
+        // post ที่เราแมปมาจาก /posts/:id
         final post = item['post'] as Map<String, dynamic>?;
 
         final price = post?['price'];
         final isGiveaway = post?['is_giveaway'];
         final address = post?['address'];
-        final postName = post?['title'];
+        final postName = post?['title'] ?? 'โพสต์ #$postId'; // กัน null
 
-        String text_status = '';
-
-        if (status == 'QUEUED') {
-          text_status = 'กำลังรอคิว';
-        } else if (status == 'PENDING') {
-          text_status = 'กำลังดำเนินการ';
-        } else if (status == 'CANCELLED') {
-          text_status = 'ยกเลิกรายการแล้ว';
-        } else if (status == 'COMPLETED') {
-          text_status = 'รายการสำเร็จแล้ว';
-        } else {
-          text_status = 'รายการหมดเวลาแล้ว';
+        // แปลงสถานะเป็นไทย
+        String textStatus = '';
+        switch (status) {
+          case 'QUEUED':
+            textStatus = 'กำลังรอคิว';
+            break;
+          case 'PENDING':
+            textStatus = 'กำลังดำเนินการ';
+            break;
+          case 'COMPLETED':
+            textStatus = 'รายการสำเร็จแล้ว';
+            break;
+          case 'CANCELLED':
+            textStatus = 'ยกเลิกรายการแล้ว';
+            break;
+          case 'EXPIRED':
+            textStatus = 'รายการหมดเวลาแล้ว';
+            break;
+          default:
+            textStatus = status;
         }
 
         return ListTile(
+          onTap: () {
+            // ถ้ามี postId ค่อยไปหน้า detail
+            if (postId != 0) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ShowHistoryDetailPage(
+                    bookingId: int.tryParse(bookingId) ?? 0,
+                  ),
+                ),
+              );
+            }
+          },
           leading: SizedBox(
             width: 45,
             height: 45,
@@ -332,79 +442,84 @@ class _BookingList extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // ฝั่งซ้าย
+              // ซ้าย
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('$createdAt'),
-                    Text('$postName',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xff000000),
+                    Text(createdAt),
+                    Text(
+                      postName,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xff000000),
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    textAlign: TextAlign.start,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,),
-                    Row(
-                      children: [
-                        SvgPicture.asset(
-                          'assets/icons/red_location.svg',
-                          width: 12,
-                          height: 12,
-                        ),
-                        const SizedBox(width: 3),
-                        Text(
-                          "$address",
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xff828282),
+                    if (address != null && address.toString().isNotEmpty)
+                      Row(
+                        children: [
+                          SvgPicture.asset(
+                            'assets/icons/red_location.svg',
+                            width: 12,
+                            height: 12,
                           ),
-                          textAlign: TextAlign.start,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                    
+                          const SizedBox(width: 3),
+                          Expanded(
+                            child: Text(
+                              address.toString(),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xff828282),
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
                     const SizedBox(height: 12),
-                    
-                    Text('$text_status',
-                    style: TextStyle(
-                      color: Color(0xff038263),
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold
-                    ),),
+                    Text(
+                      textStatus,
+                      style: const TextStyle(
+                        color: Color(0xff038263),
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ],
                 ),
               ),
 
               const SizedBox(width: 12),
 
-              // ฝั่งขวา
+              // ขวา
               Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.end, // หรือ start ก็ได้
-                  children: [
-                    Text(""),
-                    
-                    if (isGiveaway != null)
-                      Text(
-                        isGiveaway == true ? 'ไม่มีค่าใช้จ่าย' : 'มีค่าใช้จ่าย',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                          color: Color(0xffF58319),
-                        ),
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  const SizedBox(height: 4),
+                  if (isGiveaway != null)
+                    Text(
+                      isGiveaway == true ? 'ไม่มีค่าใช้จ่าย' : 'มีค่าใช้จ่าย',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: Color(0xffF58319),
                       ),
-                    if (price != null) Text('$price฿', style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xffED1429),
-                    ),),
-                  ],
-                ),
+                    ),
+                  if (price != null)
+                    Text(
+                      '${price}฿',
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xffED1429),
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
         );
