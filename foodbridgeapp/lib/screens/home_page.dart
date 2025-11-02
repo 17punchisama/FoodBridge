@@ -3,6 +3,9 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'for_you_page.dart';
 import 'community_page.dart';
 import 'nav_bar.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
+import 'dart:async';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -13,6 +16,49 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   String selectedTab = "forYou"; // ค่าเริ่มต้น
+  String? currentProvince;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserProvinceAndPosition();
+  }
+
+  Future<void> _loadUserProvinceAndPosition() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return;
+    }
+
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      final placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+      if (!mounted) return;
+      setState(() {
+        currentProvince = placemarks.isNotEmpty
+            ? placemarks.first.administrativeArea ?? "No Where"
+            : "No Where";
+      });
+    } catch (e) {
+      debugPrint("Error reverse geocoding: $e");
+      // if (!mounted) return;
+      setState(() {
+        currentProvince = "No Where";
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +104,7 @@ class _HomePageState extends State<HomePage> {
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
+                            children: [
                               Text(
                                 "ตำแหน่งของคุณ",
                                 style: TextStyle(
@@ -66,11 +112,16 @@ class _HomePageState extends State<HomePage> {
                                   fontWeight: FontWeight.normal,
                                 ),
                               ),
-                              Text(
-                                "บ้านกลางสวน",
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
+                              SizedBox(
+                                width:  400,
+                                child: Text(
+                                  currentProvince ?? 'Unknown',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    // color: Colors.black,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                             ],

@@ -1,8 +1,15 @@
+// community_page.dart
 import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:image_picker/image_picker.dart';
+
+// ถ้ามี bottom nav ของโปรเจกต์ ให้ import ด้วย (ไม่มีก็ลบออก)
+// import 'nav_bar.dart';
 
 /// ===================================================================
 /// 1) SERVICE สำหรับ token + /me
@@ -11,21 +18,17 @@ class VerifiedService {
   static const _storage = FlutterSecureStorage();
   static const _tokenKey = 'token';
 
-  /// อ่าน token ที่เก็บตอน login
   static Future<String?> getToken() async {
     return await _storage.read(key: _tokenKey);
   }
 
-  /// ดึงข้อมูล user ปัจจุบันจาก /me
   static Future<Map<String, dynamic>?> getCurrentUser() async {
     final token = await getToken();
     if (token == null) return null;
 
     final res = await http.get(
       Uri.parse('https://foodbridge1.onrender.com/me'),
-      headers: {
-        'Authorization': 'Bearer $token',
-      },
+      headers: {'Authorization': 'Bearer $token'},
     );
 
     if (res.statusCode == 200) {
@@ -36,12 +39,12 @@ class VerifiedService {
 }
 
 /// ===================================================================
-/// 2) API SERVICE หลัก (posts / users / likes / comments / create post)
+/// 2) API SERVICE (posts / likes / comments / upload / bundle)
 /// ===================================================================
 class ApiService {
   static const String baseUrl = 'https://foodbridge1.onrender.com';
 
-  /// GET /posts แล้วกรองเฉพาะ COMMUNITY
+  /// โหลดโพสต์ทั้งหมดแล้วกรองเฉพาะ COMMUNITY
   static Future<List<Map<String, dynamic>>> getCommunityPosts(
     String token,
   ) async {
@@ -58,22 +61,18 @@ class ApiService {
     if (res.statusCode == 200) {
       final data = jsonDecode(res.body);
       final items = (data['items'] as List?) ?? [];
-
       return items
-          .where(
-            (e) =>
-                (e['post_type'] ?? '').toString().toUpperCase() == 'COMMUNITY',
-          )
+          .where((e) =>
+              (e['post_type'] ?? '').toString().toUpperCase() == 'COMMUNITY')
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
     } else {
-      print('getCommunityPosts error: ${res.statusCode} ${res.body}');
+      debugPrint('getCommunityPosts error: ${res.statusCode} ${res.body}');
       return [];
     }
   }
 
-  /// POST /posts  ← สร้างโพสต์ COMMUNITY
-  /// description = บังคับ, imageUrl = ไม่บังคับ
+  /// สร้างโพสต์ COMMUNITY (description บังคับ, images ไม่บังคับ)
   static Future<bool> createCommunityPost({
     required String token,
     required String description,
@@ -83,17 +82,13 @@ class ApiService {
 
     final bodyMap = {
       "post_type": "COMMUNITY",
-      "title": "-", 
+      "title": "-",
       "description": description,
       "categories": ["ของคาว"],
+      "images": (imageUrl != null && imageUrl.trim().isNotEmpty)
+          ? [imageUrl.trim()]
+          : <String>[],
     };
-
-    // ถ้ามีรูปถึงค่อยใส่
-    if (imageUrl != null && imageUrl.trim().isNotEmpty) {
-      bodyMap["images"] = [imageUrl.trim()];
-    } else {
-      bodyMap["images"] = [];
-    }
 
     final res = await http.post(
       url,
@@ -107,12 +102,43 @@ class ApiService {
     if (res.statusCode == 200 || res.statusCode == 201) {
       return true;
     } else {
-      print('createCommunityPost error: ${res.statusCode} ${res.body}');
+      debugPrint('createCommunityPost error: ${res.statusCode} ${res.body}');
       return false;
     }
   }
 
-  /// GET /users/:id
+  /// อัปโหลดรูป: เปลี่ยน path/field ให้ตรง backend
+  /// - สมมติ backend: POST /upload  -> { "url": "https://..." }
+  /// - ชื่อฟิลด์ไฟล์: "file"
+  static Future<String?> uploadImage({
+    required String token,
+    required File file,
+  }) async {
+    final uri = Uri.parse('$baseUrl/upload'); // <- แก้ให้ตรง backend
+
+    final req = http.MultipartRequest('POST', uri)
+      ..headers['Authorization'] = 'Bearer $token'
+      ..files.add(await http.MultipartFile.fromPath('file', file.path));
+
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+
+    if (res.statusCode == 200 || res.statusCode == 201) {
+      final data = jsonDecode(res.body);
+      if (data is Map && data['url'] != null) {
+        return data['url'].toString();
+      }
+      if (data is Map &&
+          data['data'] is Map &&
+          data['data']['url'] != null) {
+        return data['data']['url'].toString();
+      }
+    } else {
+      debugPrint('uploadImage error: ${res.statusCode} ${res.body}');
+    }
+    return null;
+  }
+
   static Future<Map<String, dynamic>?> getUser(
     String token,
     int userId,
@@ -132,12 +158,11 @@ class ApiService {
       if (data is Map<String, dynamic>) return data;
       return null;
     } else {
-      print('getUser error: ${res.statusCode} ${res.body}');
+      debugPrint('getUser error: ${res.statusCode} ${res.body}');
       return null;
     }
   }
 
-  /// GET /posts/:post_id/likes
   static Future<Map<String, dynamic>?> getPostLikes(
     String token,
     int postId,
@@ -156,19 +181,17 @@ class ApiService {
       final data = jsonDecode(res.body);
       return data is Map<String, dynamic> ? data : null;
     } else {
-      print('getPostLikes error: ${res.statusCode} ${res.body}');
+      debugPrint('getPostLikes error: ${res.statusCode} ${res.body}');
       return null;
     }
   }
 
-  /// GET /posts/:post_id/comments?include_children=true
   static Future<Map<String, dynamic>?> getPostComments(
     String token,
     int postId,
   ) async {
-    final url = Uri.parse(
-      '$baseUrl/posts/$postId/comments?include_children=true',
-    );
+    final url =
+        Uri.parse('$baseUrl/posts/$postId/comments?include_children=true');
 
     final res = await http.get(
       url,
@@ -182,12 +205,11 @@ class ApiService {
       final data = jsonDecode(res.body);
       return data is Map<String, dynamic> ? data : null;
     } else {
-      print('getPostComments error: ${res.statusCode} ${res.body}');
+      debugPrint('getPostComments error: ${res.statusCode} ${res.body}');
       return null;
     }
   }
 
-  /// POST /posts/:post_id/comments
   static Future<bool> createComment({
     required String token,
     required int postId,
@@ -211,12 +233,11 @@ class ApiService {
     if (res.statusCode == 200 || res.statusCode == 201) {
       return true;
     } else {
-      print('createComment error: ${res.statusCode} ${res.body}');
+      debugPrint('createComment error: ${res.statusCode} ${res.body}');
       return false;
     }
   }
 
-  /// POST /posts/:post_id/like  ← toggle like
   static Future<Map<String, dynamic>?> toggleLike({
     required String token,
     required int postId,
@@ -235,12 +256,73 @@ class ApiService {
       final data = jsonDecode(res.body);
       return data is Map<String, dynamic> ? data : null;
     } else {
-      print('toggleLike error: ${res.statusCode} ${res.body}');
+      debugPrint('toggleLike error: ${res.statusCode} ${res.body}');
       return null;
     }
   }
 
-  /// ใช้บนหน้า list: ดึงโพสต์ชุมชน + owner + like_count + comment_count + user_ids ที่ไลก์
+  /// รวมชิ้นส่วนของโพสต์เดียว (owner / likes / comments + enrich user)
+  static Future<Map<String, dynamic>> getFullPostBundle({
+    required String token,
+    required Map<String, dynamic> post,
+  }) async {
+    final int postId = post['post_id'] as int;
+    final int providerId = post['provider_id'] as int;
+
+    final results = await Future.wait([
+      getUser(token, providerId),
+      getPostLikes(token, postId),
+      getPostComments(token, postId),
+    ]);
+
+    final Map<String, dynamic> owner =
+        (results[0] as Map<String, dynamic>?) ?? {};
+    final Map<String, dynamic> likes =
+        (results[1] as Map<String, dynamic>?) ?? {};
+    final Map<String, dynamic>? commentsResp =
+        results[2] as Map<String, dynamic>?;
+
+    final List<dynamic> commentsRaw =
+        (commentsResp?['comments'] as List?) ?? [];
+
+    final List<int> commenterIds = [];
+    for (final c in commentsRaw) {
+      if (c is Map && c['user_id'] != null) {
+        final int uid = c['user_id'] as int;
+        if (!commenterIds.contains(uid)) commenterIds.add(uid);
+      }
+    }
+
+    final List<Future<Map<String, dynamic>?>> userJobs =
+        commenterIds.map((uid) => getUser(token, uid)).toList();
+    final List<Map<String, dynamic>?> userResults = await Future.wait(userJobs);
+
+    final Map<int, Map<String, dynamic>> commentUsersById = {};
+    for (int i = 0; i < commenterIds.length; i++) {
+      final uid = commenterIds[i];
+      final user = userResults[i];
+      if (user != null) commentUsersById[uid] = user;
+    }
+
+    final List<Map<String, dynamic>> commentsEnriched =
+        commentsRaw.map<Map<String, dynamic>>((c) {
+      final m = Map<String, dynamic>.from(c as Map);
+      final uid = m['user_id'];
+      if (uid is int && commentUsersById.containsKey(uid)) {
+        m['user'] = commentUsersById[uid];
+      }
+      return m;
+    }).toList();
+
+    return {
+      'post': post,
+      'owner': owner,
+      'likes': likes,
+      'comments': commentsEnriched,
+    };
+  }
+
+  /// ดึงฟีด + enrich (owner / like_count / comment_count / user_ids ที่ไลก์)
   static Future<List<Map<String, dynamic>>> getCommunityFeedWithExtras(
     String token,
   ) async {
@@ -286,79 +368,10 @@ class ApiService {
       'liked_user_ids': likedUserIds,
     };
   }
-
-  /// ดึงโพสต์เดี่ยว + owner + likes + comments + ผูก user ของคนคอมเมนต์
-  static Future<Map<String, dynamic>> getFullPostBundle({
-    required String token,
-    required Map<String, dynamic> post,
-  }) async {
-    final int postId = post['post_id'] as int;
-    final int providerId = post['provider_id'] as int;
-
-    final results = await Future.wait([
-      getUser(token, providerId),
-      getPostLikes(token, postId),
-      getPostComments(token, postId),
-    ]);
-
-    final Map<String, dynamic> owner =
-        (results[0] as Map<String, dynamic>?) ?? {};
-    final Map<String, dynamic> likes =
-        (results[1] as Map<String, dynamic>?) ?? {};
-    final Map<String, dynamic>? commentsResp =
-        results[2] as Map<String, dynamic>?;
-
-    final List<dynamic> commentsRaw =
-        (commentsResp?['comments'] as List?) ?? [];
-
-    // รวม user_id คนคอมเมนต์
-    final List<int> commenterIds = [];
-    for (final c in commentsRaw) {
-      if (c is Map && c['user_id'] != null) {
-        final int uid = c['user_id'] as int;
-        if (!commenterIds.contains(uid)) {
-          commenterIds.add(uid);
-        }
-      }
-    }
-
-    // ดึง user ของคนคอมเมนต์
-    final List<Future<Map<String, dynamic>?>> userJobs =
-        commenterIds.map((uid) => getUser(token, uid)).toList();
-
-    final List<Map<String, dynamic>?> userResults = await Future.wait(userJobs);
-
-    final Map<int, Map<String, dynamic>> commentUsersById = {};
-    for (int i = 0; i < commenterIds.length; i++) {
-      final uid = commenterIds[i];
-      final user = userResults[i];
-      if (user != null) {
-        commentUsersById[uid] = user;
-      }
-    }
-
-    // ผูก user เข้าไปในแต่ละคอมเมนต์
-    final List<Map<String, dynamic>> commentsEnriched =
-        commentsRaw.map<Map<String, dynamic>>((c) {
-      final m = Map<String, dynamic>.from(c as Map);
-      final uid = m['user_id'];
-      if (uid is int && commentUsersById.containsKey(uid)) {
-        m['user'] = commentUsersById[uid];
-      }
-      return m;
-    }).toList();
-
-    return {
-      'post': post,
-      'owner': owner,
-      'likes': likes,
-      'comments': commentsEnriched,
-    };
-  }
 }
 
 /// ===================================================================
-/// 3) POST DETAIL PAGE (มี like + comment + ส่งค่ากลับ + ดัก back ปุ่มเครื่อง)
+/// 3) POST DETAIL PAGE (มี like + comment + ส่งค่ากลับ + back แบบ commu)
 /// ===================================================================
 class PostDetailPage extends StatefulWidget {
   final Map<String, dynamic> post;
@@ -383,8 +396,6 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
   int _likeCount = 0;
   bool _likedByMe = false;
-
-  // ถ้ามีการเปลี่ยน (like / comment) = true → ส่งกลับไปหน้า commu
   bool _modified = false;
 
   @override
@@ -400,7 +411,6 @@ class _PostDetailPageState extends State<PostDetailPage> {
     );
 
     final meId = widget.currentUser?['user_id'];
-
     final Map<String, dynamic> likes =
         (bundle['likes'] as Map<String, dynamic>?) ?? {};
     final int likeCount = (likes['like_count'] ?? 0) as int;
@@ -408,9 +418,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
         (likes['user_ids'] is List) ? likes['user_ids'] as List : [];
 
     bool likedByMe = false;
-    if (meId != null) {
-      likedByMe = likedUserIds.contains(meId);
-    }
+    if (meId != null) likedByMe = likedUserIds.contains(meId);
 
     _likeCount = likeCount;
     _likedByMe = likedByMe;
@@ -418,21 +426,11 @@ class _PostDetailPageState extends State<PostDetailPage> {
     return bundle;
   }
 
-  Widget _buildPostImage(String path) {
+  Widget _postImage(String path) {
     if (path.startsWith('http')) {
-      return Image.network(
-        path,
-        width: double.infinity,
-        height: 200,
-        fit: BoxFit.cover,
-      );
+      return Image.network(path, width: double.infinity, height: 200, fit: BoxFit.cover);
     }
-    return Image.asset(
-      path,
-      width: double.infinity,
-      height: 200,
-      fit: BoxFit.cover,
-    );
+    return Image.asset(path, width: double.infinity, height: 200, fit: BoxFit.cover);
   }
 
   String _formatIso(String iso) {
@@ -453,7 +451,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
     }
   }
 
-  Widget _currentUserAvatar() {
+  Widget _meAvatar() {
     final me = widget.currentUser;
     if (me == null) {
       return const CircleAvatar(
@@ -462,13 +460,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
       );
     }
     final avatarUrl = me['avatar_url'] as String?;
-    if (avatarUrl != null &&
-        avatarUrl.isNotEmpty &&
-        avatarUrl.startsWith('http')) {
-      return CircleAvatar(
-        backgroundImage: NetworkImage(avatarUrl),
-        radius: 20,
-      );
+    if (avatarUrl != null && avatarUrl.isNotEmpty && avatarUrl.startsWith('http')) {
+      return CircleAvatar(backgroundImage: NetworkImage(avatarUrl), radius: 20);
     }
     return const CircleAvatar(
       backgroundImage: AssetImage('assets/images/profile1.png'),
@@ -479,10 +472,9 @@ class _PostDetailPageState extends State<PostDetailPage> {
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
-      // ดักทุกการ back (รวมปุ่มเครื่อง)
       onWillPop: () async {
         Navigator.pop(context, _modified);
-        return false; // บอกว่าเรา pop เองแล้ว
+        return false;
       },
       child: Scaffold(
         body: SafeArea(
@@ -514,21 +506,15 @@ class _PostDetailPageState extends State<PostDetailPage> {
                       .toString();
 
               final String? avatarUrl = owner['avatar_url'] as String?;
-              final Widget avatarWidget =
-                  (avatarUrl != null &&
-                          avatarUrl.isNotEmpty &&
-                          avatarUrl.startsWith('http'))
-                      ? CircleAvatar(
-                          backgroundImage: NetworkImage(avatarUrl),
-                          radius: 25,
-                        )
-                      : const CircleAvatar(
-                          backgroundImage:
-                              AssetImage('assets/images/profile1.png'),
-                          radius: 25,
-                        );
+              final Widget avatarWidget = (avatarUrl != null &&
+                      avatarUrl.isNotEmpty &&
+                      avatarUrl.startsWith('http'))
+                  ? CircleAvatar(backgroundImage: NetworkImage(avatarUrl), radius: 25)
+                  : const CircleAvatar(
+                      backgroundImage: AssetImage('assets/images/profile1.png'),
+                      radius: 25,
+                    );
 
-              // unix → string
               final createdAt = post['created_at'];
               String createdAtStr = '';
               if (createdAt is int) {
@@ -544,18 +530,13 @@ class _PostDetailPageState extends State<PostDetailPage> {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // header
+                  // HEADER: back เหมือน commu page
                   Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 16,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                     child: Row(
                       children: [
                         GestureDetector(
-                          onTap: () {
-                            Navigator.pop(context, _modified);
-                          },
+                          onTap: () => Navigator.pop(context, _modified),
                           child: SvgPicture.asset(
                             'assets/icons/back_arrow.svg',
                             width: 24,
@@ -615,14 +596,12 @@ class _PostDetailPageState extends State<PostDetailPage> {
                               setState(() {
                                 _likedByMe = likedNow;
                                 _likeCount = likeCountNow;
-                                _modified = true; // มีการแก้
+                                _modified = true;
                               });
                             }
                           },
                           icon: Icon(
-                            _likedByMe
-                                ? Icons.favorite
-                                : Icons.favorite_border,
+                            _likedByMe ? Icons.favorite : Icons.favorite_border,
                             color: Colors.red,
                             size: 27,
                           ),
@@ -646,22 +625,19 @@ class _PostDetailPageState extends State<PostDetailPage> {
                   // รูป (ถ้ามี)
                   if (firstImage != null && firstImage.isNotEmpty)
                     Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 12,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(10),
-                        child: _buildPostImage(firstImage),
+                        child: _postImage(firstImage),
                       ),
                     ),
 
-                  // พิมพ์คอมเมนต์
+                  // กล่องคอมเมนต์
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Row(
                       children: [
-                        _currentUserAvatar(),
+                        _meAvatar(),
                         const SizedBox(width: 8),
                         Expanded(
                           child: TextField(
@@ -686,9 +662,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                               ? const SizedBox(
                                   width: 16,
                                   height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
+                                  child: CircularProgressIndicator(strokeWidth: 2),
                                 )
                               : const Icon(Icons.send),
                           onPressed: _isSending
@@ -697,9 +671,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                                   final text = _commentCtrl.text.trim();
                                   if (text.isEmpty) return;
 
-                                  setState(() {
-                                    _isSending = true;
-                                  });
+                                  setState(() => _isSending = true);
 
                                   final ok = await ApiService.createComment(
                                     token: widget.token,
@@ -711,13 +683,10 @@ class _PostDetailPageState extends State<PostDetailPage> {
                                     _commentCtrl.clear();
                                     setState(() {
                                       _future = _loadBundle();
-                                      _modified = true; // เพราะมีเม้นใหม่
+                                      _modified = true;
                                     });
                                   }
-
-                                  setState(() {
-                                    _isSending = false;
-                                  });
+                                  setState(() => _isSending = false);
                                 },
                         ),
                       ],
@@ -725,7 +694,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                   ),
                   const SizedBox(height: 8),
 
-                  // comments list
+                  // รายการคอมเมนต์
                   Expanded(
                     child: ListView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -761,9 +730,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
                                 )
                               else
                                 const CircleAvatar(
-                                  backgroundImage: AssetImage(
-                                    'assets/images/profile1.png',
-                                  ),
+                                  backgroundImage:
+                                      AssetImage('assets/images/profile1.png'),
                                   radius: 18,
                                 ),
                               const SizedBox(width: 8),
@@ -814,7 +782,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
 }
 
 /// ===================================================================
-/// 4) COMMUNITY PAGE (list) — กลับมาแล้ว refresh ถ้ามีการแก้ + popup โพสต์
+/// 4) COMMUNITY PAGE (ฟีด + สร้างโพสต์ด้วยอัปโหลดรูป)
 /// ===================================================================
 class CommunityPage extends StatefulWidget {
   const CommunityPage({super.key});
@@ -829,6 +797,8 @@ class _CommunityPageState extends State<CommunityPage> {
   List<Map<String, dynamic>> _feed = [];
   bool _isLoading = true;
   String? _error;
+
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
@@ -867,10 +837,9 @@ class _CommunityPageState extends State<CommunityPage> {
   String _formatFromUnix(dynamic v) {
     if (v == null) return '';
     try {
-      final dt = DateTime.fromMillisecondsSinceEpoch(
-        (v as int) * 1000,
-        isUtc: true,
-      ).toLocal();
+      final dt =
+          DateTime.fromMillisecondsSinceEpoch((v as int) * 1000, isUtc: true)
+              .toLocal();
       return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} '
           '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
     } catch (_) {
@@ -878,7 +847,7 @@ class _CommunityPageState extends State<CommunityPage> {
     }
   }
 
-  Widget _buildMeAvatar(Map<String, dynamic>? me) {
+  Widget _meAvatar(Map<String, dynamic>? me) {
     if (me == null) {
       return const CircleAvatar(
         backgroundImage: AssetImage('assets/images/profile1.png'),
@@ -886,13 +855,8 @@ class _CommunityPageState extends State<CommunityPage> {
       );
     }
     final avatarUrl = me['avatar_url'] as String?;
-    if (avatarUrl != null &&
-        avatarUrl.isNotEmpty &&
-        avatarUrl.startsWith('http')) {
-      return CircleAvatar(
-        backgroundImage: NetworkImage(avatarUrl),
-        radius: 25,
-      );
+    if (avatarUrl != null && avatarUrl.isNotEmpty && avatarUrl.startsWith('http')) {
+      return CircleAvatar(backgroundImage: NetworkImage(avatarUrl), radius: 25);
     }
     return const CircleAvatar(
       backgroundImage: AssetImage('assets/images/profile1.png'),
@@ -900,16 +864,14 @@ class _CommunityPageState extends State<CommunityPage> {
     );
   }
 
-  String _getLikeText(int likeCount) {
-    return likeCount.toString();
-  }
+  String _likeText(int likeCount) => likeCount.toString();
 
-  /// popup สร้างโพสต์
+  /// Dialog สร้างโพสต์ (อัปโหลดรูปแทนพิมพ์ลิงก์)
   Future<void> _showCreatePostDialog() async {
     if (_token == null) return;
 
     final descCtrl = TextEditingController();
-    final imgCtrl = TextEditingController();
+    File? pickedImageFile;
     bool posting = false;
 
     await showDialog(
@@ -918,12 +880,10 @@ class _CommunityPageState extends State<CommunityPage> {
         return StatefulBuilder(
           builder: (ctx, setStateDialog) {
             return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               title: Row(
                 children: [
-                  _buildMeAvatar(_me),
+                  _meAvatar(_me),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -936,6 +896,7 @@ class _CommunityPageState extends State<CommunityPage> {
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     TextField(
                       controller: descCtrl,
@@ -946,29 +907,59 @@ class _CommunityPageState extends State<CommunityPage> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    TextField(
-                      controller: imgCtrl,
-                      decoration: InputDecoration(
-                        labelText: 'ลิงก์รูป (ไม่บังคับ)',
-                        border: const OutlineInputBorder(),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.image),
-                          onPressed: () {
-                            // ถ้าจะต่อ image_picker ค่อยมาต่อจุดนี้
-                          },
+                    InkWell(
+                      onTap: posting
+                          ? null
+                          : () async {
+                              final picked = await _picker.pickImage(
+                                source: ImageSource.gallery,
+                                imageQuality: 85,
+                              );
+                              if (picked != null) {
+                                setStateDialog(() {
+                                  pickedImageFile = File(picked.path);
+                                });
+                              }
+                            },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xffF2F2F2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.image),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                pickedImageFile != null
+                                    ? 'เลือกรูปแล้ว: ${pickedImageFile!.path.split('/').last}'
+                                    : 'เลือกรูปจากเครื่อง (ไม่บังคับ)',
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
+                    if (pickedImageFile != null) ...[
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(
+                          pickedImageFile!,
+                          height: 120,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
               actions: [
                 TextButton(
-                  onPressed: posting
-                      ? null
-                      : () {
-                          Navigator.pop(ctx);
-                        },
+                  onPressed: posting ? null : () => Navigator.pop(ctx),
                   child: const Text('ยกเลิก'),
                 ),
                 ElevatedButton(
@@ -976,40 +967,37 @@ class _CommunityPageState extends State<CommunityPage> {
                       ? null
                       : () async {
                           final desc = descCtrl.text.trim();
-                          final img = imgCtrl.text.trim();
-
                           if (desc.isEmpty) {
-                            // บังคับให้พิมพ์อย่างน้อย 1 ตัว
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('กรุณาพิมพ์คำอธิบายก่อน'),
-                              ),
+                              const SnackBar(content: Text('กรุณาพิมพ์ข้อความก่อน')),
                             );
                             return;
                           }
 
-                          setStateDialog(() {
-                            posting = true;
-                          });
+                          setStateDialog(() => posting = true);
+
+                          String? imageUrl;
+                          if (pickedImageFile != null) {
+                            imageUrl = await ApiService.uploadImage(
+                              token: _token!,
+                              file: pickedImageFile!,
+                            );
+                          }
 
                           final ok = await ApiService.createCommunityPost(
                             token: _token!,
                             description: desc,
-                            imageUrl: img.isEmpty ? null : img,
+                            imageUrl: imageUrl,
                           );
 
-                          setStateDialog(() {
-                            posting = false;
-                          });
+                          setStateDialog(() => posting = false);
 
                           if (ok) {
-                            Navigator.pop(ctx); // ปิด dialog
-                            await _loadAll(); // reload feed
+                            Navigator.pop(ctx);
+                            await _loadAll();
                           } else {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('โพสต์ไม่สำเร็จ'),
-                              ),
+                              const SnackBar(content: Text('โพสต์ไม่สำเร็จ')),
                             );
                           }
                         },
@@ -1032,57 +1020,46 @@ class _CommunityPageState extends State<CommunityPage> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-
     if (_error != null) {
-      return Scaffold(
-        body: Center(child: Text(_error!)),
-      );
+      return Scaffold(body: Center(child: Text(_error!)));
     }
 
     final token = _token!;
     final me = _me;
 
     return Scaffold(
+      // ถ้ามี bottom nav ของโปรเจกต์ ให้ปลดบรรทัดนี้
+      // bottomNavigationBar: NavBar(),
       body: Column(
         children: [
           const SizedBox(height: 16),
 
-          // กล่องโพสต์ใหม่
+          // กล่องเขียนโพสต์ใหม่ (กดแล้วเปิด dialog)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: GestureDetector(
               onTap: _showCreatePostDialog,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(10),
                   boxShadow: const [
-                    BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 8,
-                      offset: Offset(2, 2),
-                    ),
+                    BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(2, 2)),
                   ],
                 ),
                 child: Row(
                   children: [
-                    _buildMeAvatar(me),
+                    _meAvatar(me),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         me?['display_name'] != null
                             ? 'โพสต์อะไรหน่อยไหม ${me!['display_name']}'
                             : 'เกิดอะไรขึ้น?',
-                        style: const TextStyle(
-                          color: Color(0xff828282),
-                          fontSize: 16,
-                        ),
+                        style: const TextStyle(color: Color(0xff828282), fontSize: 16),
                       ),
                     ),
                     const Icon(Icons.edit, color: Color(0xff828282)),
@@ -1093,17 +1070,14 @@ class _CommunityPageState extends State<CommunityPage> {
           ),
           const SizedBox(height: 16),
 
-          // Feed
+          // FEED
           Expanded(
             child: ListView.separated(
               itemCount: _feed.length,
-              separatorBuilder: (_, __) =>
-                  const Divider(height: 1, color: Colors.grey),
+              separatorBuilder: (_, __) => const Divider(height: 1, color: Colors.grey),
               itemBuilder: (context, index) {
                 final item = _feed[index];
-
-                final Map<String, dynamic> post =
-                    item['post'] as Map<String, dynamic>;
+                final Map<String, dynamic> post = item['post'] as Map<String, dynamic>;
                 final Map<String, dynamic> owner =
                     (item['owner'] as Map<String, dynamic>?) ?? {};
 
@@ -1111,13 +1085,10 @@ class _CommunityPageState extends State<CommunityPage> {
                 final int commentCount = item['comment_count'] as int? ?? 0;
 
                 final List likedUserIds =
-                    item['liked_user_ids'] is List
-                        ? item['liked_user_ids']
-                        : [];
+                    item['liked_user_ids'] is List ? item['liked_user_ids'] : [];
 
                 final meId = me?['user_id'];
-                final bool likedByMe =
-                    meId != null ? likedUserIds.contains(meId) : false;
+                final bool likedByMe = meId != null ? likedUserIds.contains(meId) : false;
 
                 final String displayName =
                     (owner['display_name'] ??
@@ -1126,22 +1097,16 @@ class _CommunityPageState extends State<CommunityPage> {
                         .toString();
 
                 final String? avatarUrl = owner['avatar_url'] as String?;
-                final Widget avatarWidget =
-                    (avatarUrl != null &&
-                            avatarUrl.isNotEmpty &&
-                            avatarUrl.startsWith('http'))
-                        ? CircleAvatar(
-                            backgroundImage: NetworkImage(avatarUrl),
-                            radius: 25,
-                          )
-                        : const CircleAvatar(
-                            backgroundImage:
-                                AssetImage('assets/images/profile1.png'),
-                            radius: 25,
-                          );
+                final Widget avatarWidget = (avatarUrl != null &&
+                        avatarUrl.isNotEmpty &&
+                        avatarUrl.startsWith('http'))
+                    ? CircleAvatar(backgroundImage: NetworkImage(avatarUrl), radius: 25)
+                    : const CircleAvatar(
+                        backgroundImage: AssetImage('assets/images/profile1.png'),
+                        radius: 25,
+                      );
 
                 final createdAtStr = _formatFromUnix(post['created_at']);
-
                 final List images = (post['images'] as List?) ?? [];
                 final String? firstImage =
                     images.isNotEmpty ? images.first.toString() : null;
@@ -1158,7 +1123,6 @@ class _CommunityPageState extends State<CommunityPage> {
                         ),
                       ),
                     );
-
                     if (changed == true) {
                       await _loadAll();
                     }
@@ -1179,15 +1143,11 @@ class _CommunityPageState extends State<CommunityPage> {
                           ),
                           subtitle: Text(
                             createdAtStr,
-                            style: const TextStyle(
-                              color: Color(0xFFF58319),
-                            ),
+                            style: const TextStyle(color: Color(0xFFF58319)),
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: Text(
                             post['description'] ?? '',
                             maxLines: 3,
@@ -1196,10 +1156,8 @@ class _CommunityPageState extends State<CommunityPage> {
                         ),
                         if (firstImage != null && firstImage.isNotEmpty)
                           Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(10),
                               child: Image.network(
@@ -1211,10 +1169,8 @@ class _CommunityPageState extends State<CommunityPage> {
                             ),
                           ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.start,
                             children: [
@@ -1230,13 +1186,10 @@ class _CommunityPageState extends State<CommunityPage> {
                                         (res['like_count'] ?? 0) as int;
 
                                     setState(() {
-                                      _feed[index]['like_count'] =
-                                          likeCountNow;
+                                      _feed[index]['like_count'] = likeCountNow;
                                       final meId = me?['user_id'];
-                                      List newLikedIds = List.from(
-                                        _feed[index]['liked_user_ids'] ??
-                                            <int>[],
-                                      );
+                                      List newLikedIds =
+                                          List.from(_feed[index]['liked_user_ids'] ?? <int>[]);
                                       if (meId != null) {
                                         if (likedNow) {
                                           if (!newLikedIds.contains(meId)) {
@@ -1246,8 +1199,7 @@ class _CommunityPageState extends State<CommunityPage> {
                                           newLikedIds.remove(meId);
                                         }
                                       }
-                                      _feed[index]['liked_user_ids'] =
-                                          newLikedIds;
+                                      _feed[index]['liked_user_ids'] = newLikedIds;
                                     });
                                   }
                                 },
@@ -1255,14 +1207,12 @@ class _CommunityPageState extends State<CommunityPage> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Icon(
-                                      likedByMe
-                                          ? Icons.favorite
-                                          : Icons.favorite_border,
+                                      likedByMe ? Icons.favorite : Icons.favorite_border,
                                       color: Colors.red,
                                       size: 27,
                                     ),
                                     const SizedBox(width: 4),
-                                    Text(_getLikeText(likeCount)),
+                                    Text(_likeText(likeCount)),
                                   ],
                                 ),
                               ),
