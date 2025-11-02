@@ -15,6 +15,7 @@ import 'package:foodbridgeapp/verified_service.dart';
 import 'package:geocoding/geocoding.dart';
 import 'dart:async';
 
+import 'view_more_page.dart';
 class ForYouPage extends StatefulWidget {
   const ForYouPage({super.key});
 
@@ -292,7 +293,41 @@ class _ForYouPageState extends State<ForYouPage> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _HeaderRow(name: 'โพสต์ของฉัน'),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'รายการแจกฟรีใกล้ฉัน',
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ViewMorePage(
+                                type: 'free',      
+                                ownerId: '2', 
+                              ),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          width: 25,
+                          height: 25,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFF58319),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.arrow_forward_ios,
+                            color: Colors.white,
+                            size: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   PostPreviewSmall(items: allFreePosts),
                 ],
               ),
@@ -307,17 +342,30 @@ class _ForYouPageState extends State<ForYouPage> {
                   'Flash Sale ลดเดือดชั่วโมงนี้ ⚡',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
                 ),
-                Container(
-                  width: 25,
-                  height: 25,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF58319),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.arrow_forward_ios,
-                    color: Colors.white,
-                    size: 12,
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ViewMorePage(
+                          type: 'sale',      
+                          ownerId: '2', 
+                        ),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    width: 25,
+                    height: 25,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFF58319),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.arrow_forward_ios,
+                      color: Colors.white,
+                      size: 12,
+                    ),
                   ),
                 ),
               ],
@@ -480,21 +528,19 @@ class _ForYouPageState extends State<ForYouPage> {
               children: categories_4.map((cat) {
                 return GestureDetector(
                   onTap: () {
-                    // Navigator.push(
-                    //   context,
-                    //   MaterialPageRoute(
-                    //     builder: (_) => CategoryPage(categoryLabel: cat['label']!),
-                    //   ),
-                    // );
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ViewMorePage(
+                                type: 'category',      
+                                ownerId: cat['label']!, 
+                              ),
+                      ),
+                    );
                   },
                   child: Column(
                     children: [
                       Image.asset(cat['icon']!, width: 50, height: 50),
-                      // SvgPicture.asset(
-                      //   cat['icon']!,
-                      //   width: 50,
-                      //   height: 50,
-                      // ),
                       const SizedBox(height: 4),
                       Text(
                         cat['label']!,
