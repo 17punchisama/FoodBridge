@@ -19,7 +19,7 @@ enum UserStatus {
 }
 
 class PostPage extends StatefulWidget {
-  final int postId = 20; // example post id
+  final int postId = 34; // example post id
   const PostPage({super.key});
 
   // final int postId;
@@ -54,7 +54,11 @@ class _PostPageState extends State<PostPage> {
   final String imagePath = 'assets/images/savory_img.png';
   String? status;
   String? freeLabel;
-  int? availableCount;
+
+  int remainingCount = 0;
+  int receiverCount = 0;
+  int totalQuantity = 0 ; // backend total quantity
+
   String? menuName;
   String? address;
   String? openTime;
@@ -94,7 +98,7 @@ class _PostPageState extends State<PostPage> {
         setState(() {
           status = data['status'] ?? 'เปิดจอง';
           freeLabel = data['is_giveaway'] == true ? 'ฟรี' : '';
-          availableCount = data['quantity'] ?? 0;
+          totalQuantity = data['quantity'] ?? 0;
           menuName = data['title'] ?? '-';
           address = data['address'] ?? '-';
           description = data['description'] ?? '-';
@@ -110,7 +114,9 @@ class _PostPageState extends State<PostPage> {
           district = data['district'] ?? 'ไม่ทราบ';
           province = data['province'] ?? 'ไม่ทราบ';
         });
-        
+
+        await _fetchReceiverCount();
+
         // Move map to post location
         if (postLat != null && postLng != null && _mapController != null) {
           _mapController!.animateCamera(
@@ -152,12 +158,15 @@ class _PostPageState extends State<PostPage> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final count = data['receiver_count'] ?? 0;
-
-        setState(() {
-          availableCount = count;
+        print('totalQuantity: $totalQuantity');
+        setState(() { 
+          receiverCount = count;
+          remainingCount = (totalQuantity - receiverCount).clamp(0, totalQuantity);
+     
         });
 
         print('Updated receiver count: $count');
+        print('remaining Food: $remainingCount');
       } else {
         print('Failed to fetch receiver count: ${response.statusCode}');
       }
@@ -165,6 +174,7 @@ class _PostPageState extends State<PostPage> {
       print('Error fetching receiver count: $e');
     }
   }
+
 
   Future<void> _fetchUserVerificationStatus() async {
   final user = await VerifiedService.getCurrentUser();
@@ -397,11 +407,11 @@ class _PostPageState extends State<PostPage> {
                                           vertical: 4,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: Color(0xFF038263),
+                                          color:  remainingCount > 0 ? Color(0xFF038263): Colors.red[600],
                                           borderRadius: BorderRadius.circular(4),
                                         ),
                                         child: Text(
-                                          '$availableCount', // backend
+                                          remainingCount > 0 ? '$remainingCount' : 'เต็มแล้ว', // backend
                                           style: TextStyle(
                                             color: Colors.white,
                                             fontWeight: FontWeight.bold,
@@ -599,6 +609,8 @@ class _PostPageState extends State<PostPage> {
                                 ],
                               ),
                             ),
+
+
                           ],
                         ),
                       ),
@@ -644,6 +656,7 @@ class _PostPageState extends State<PostPage> {
 
                       const SizedBox(height: 20),
                       // extra Details section
+
                       Container(
                         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         padding: const EdgeInsets.all(16),
@@ -694,7 +707,7 @@ class _PostPageState extends State<PostPage> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 240), // extra space for bottom overlay
+                const SizedBox(height: 360), // extra space for bottom overlay
               ], 
             ),
           ),
@@ -926,7 +939,7 @@ class _PostPageState extends State<PostPage> {
       }
       // else if (future day → allow booking freely)
 
-      // ✅ All checks passed
+      // All checks passed
       return true;
     } catch (e) {
       print("Error validating booking: $e");
@@ -1096,7 +1109,7 @@ class _PostPageState extends State<PostPage> {
                         ),
                       ),
                       const TextSpan(
-                        text: 'กรุณายืนยันตัวตนก่อนแต้มโพสต์',
+                        text: 'กรุณายืนยันตัวตนก่อนรับสิทธิ์',
                       ),
                     ],
                   ),

@@ -539,7 +539,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                 _latLng = result.latLng;
                                 _addressController.text = formatThaiAddress(result.placemark);
                                 _province = result.placemark.administrativeArea ?? '';
-                                _district = result.placemark.subAdministrativeArea ?? '';
+                                _district = result.placemark.subLocality ?? '';
                                 _postal   = result.placemark.postalCode ?? '';
                               });
                             }
@@ -781,7 +781,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
     "close_time": closeTimeDate.toIso8601String(),
     "address": _addressController.text,
     "province": _province,
-    "district": "",
+    "district": _district,
     "phone": _phoneController.text,
     "lat": _latLng!.latitude,     
     "lng": _latLng!.longitude,    
