@@ -71,6 +71,7 @@ class _ForYouPageState extends State<ForYouPage> {
         position.latitude,
         position.longitude,
       );
+      if (!mounted) return;
       setState(() {
         currentProvince = placemarks.isNotEmpty
             ? placemarks.first.administrativeArea ?? "No Where"
@@ -79,6 +80,7 @@ class _ForYouPageState extends State<ForYouPage> {
       });
     } catch (e) {
       debugPrint("Error reverse geocoding: $e");
+      if (!mounted) return;
       setState(() {
         currentProvince = "No Where";
         _currentUserPosition = LatLng(13.7563, 100.5018);
@@ -225,6 +227,7 @@ class _ForYouPageState extends State<ForYouPage> {
         return dateB.compareTo(dateA);
       });
 
+      if (!mounted) return;
       setState(() {
         allFreePosts = itemFree;
         allSalePosts = itemSale;
@@ -232,6 +235,8 @@ class _ForYouPageState extends State<ForYouPage> {
       });
     } catch (e) {
       debugPrint("Error fetching posts: $e");
+
+      if (!mounted) return;
       setState(() {
         loadingFreePosts = false;
         loadingSalePosts = false;
@@ -374,11 +379,13 @@ class _ForYouPageState extends State<ForYouPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                flashItem['title']!,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
+                              SizedBox(
+                                width: 140, // or whatever width fits your layout
+                                child: Text(
+                                  flashItem['title']!,
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                                 ),
                               ),
                               Text(
@@ -397,8 +404,7 @@ class _ForYouPageState extends State<ForYouPage> {
                                   ),
                                   const SizedBox(width: 3),
                                   SizedBox(
-                                    width:
-                                        120, // or whatever width fits your layout
+                                    width: 130, // or whatever width fits your layout
                                     child: Text(
                                       flashItem['location']!,
                                       overflow: TextOverflow.ellipsis,
@@ -680,9 +686,14 @@ class _ItemCard extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          item['title']!,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        SizedBox(
+          width: 140, // or whatever width fits your layout
+          child: Text(
+            item['title']!,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          ),
         ),
         const SizedBox(height: 2),
         Row(
@@ -694,7 +705,7 @@ class _ItemCard extends StatelessWidget {
             ),
             const SizedBox(width: 2),
             SizedBox(
-              width: 120, // or whatever width fits your layout
+              width: 130, // or whatever width fits your layout
               child: Text(
                 item['location']!,
                 overflow: TextOverflow.ellipsis,
