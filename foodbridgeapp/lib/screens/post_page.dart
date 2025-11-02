@@ -59,6 +59,7 @@ class _PostPageState extends State<PostPage> {
   int receiverCount = 0;
   int totalQuantity = 0 ; // backend total quantity
 
+  String? imageUrl;
   String? menuName;
   String? address;
   String? openTime;
@@ -102,6 +103,11 @@ class _PostPageState extends State<PostPage> {
           totalQuantity = data['quantity'] ?? 0;
           menuName = data['title'] ?? '-';
           address = data['address'] ?? '-';
+          if (data['images'] != null && data['images'].isNotEmpty) {
+            imageUrl = data['images'][0];
+          } else {
+            imageUrl = null;
+  }
           description = data['description'] ?? '-';
           openTime = _formatTimeRange(data['open_time'], data['close_time']);
           openDateFormatted = _formatDate(data['open_time']);
@@ -152,6 +158,7 @@ class _PostPageState extends State<PostPage> {
 
     try {
       final response = await http.get(
+        //get only bookings with specific statuses
         Uri.parse('https://foodbridge1.onrender.com/bookings?post_id=${widget.postId}&status=PENDING,QUEUED,COMPLETED'),
         headers: {
           "Content-Type": "application/json",
@@ -402,11 +409,32 @@ class _PostPageState extends State<PostPage> {
                 // Header with food image
                 Stack(
                   children: [
-                    Image.asset(
-                      imagePath, // backend image path
-                      width: double.infinity,
-                      height: 280,
-                      fit: BoxFit.cover,
+                    ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(12),
+                        bottomRight: Radius.circular(12),
+                      ),
+                      child: (imageUrl != null && imageUrl!.isNotEmpty)
+                          ? Image.network(
+                              imageUrl!, // ✅ from backend
+                              width: double.infinity,
+                              height: 280,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Image.asset(
+                                  'assets/images/savory_img.png', // fallback local image
+                                  width: double.infinity,
+                                  height: 280,
+                                  fit: BoxFit.cover,
+                                );
+                              },
+                            )
+                          : Image.asset(
+                              'assets/images/savory_img.png', // fallback when no URL
+                              width: double.infinity,
+                              height: 280,
+                              fit: BoxFit.cover,
+                            ),
                     ),
                     Container(
                       height: 100,
