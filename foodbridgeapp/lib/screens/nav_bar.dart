@@ -34,8 +34,7 @@ class NavBar extends StatelessWidget {
             page = const HomePage();
             break;
           case 1:
-            page = const PostPage();
-            break;
+            page = const HomePage();
           case 2:
             page = const NotificationPage();
             break;
