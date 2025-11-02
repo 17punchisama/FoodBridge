@@ -163,7 +163,7 @@ class _ViewMorePageState extends State<ViewMorePage> {
           Map<String, dynamic> bookingData = {};
           final bookingRes = await http.get(
             Uri.parse(
-              'https://foodbridge1.onrender.com/bookings?post_id=${item['post_id']}',
+              'https://foodbridge1.onrender.com/bookings?post_id=${item['post_id']}&status=PENDING,QUEUED,COMPLETED',
             ),
             headers: {'Authorization': 'Bearer $token'},
           );
