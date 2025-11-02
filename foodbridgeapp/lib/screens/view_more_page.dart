@@ -57,6 +57,7 @@ class _ViewMorePageState extends State<ViewMorePage> {
         position.latitude,
         position.longitude,
       );
+      if (!mounted) return;
       setState(() {
         currentProvince = placemarks.isNotEmpty
             ? placemarks.first.administrativeArea ?? "No Where"
@@ -189,12 +190,14 @@ class _ViewMorePageState extends State<ViewMorePage> {
         return dateB.compareTo(dateA);
       });
 
+      if (!mounted) return;
       setState(() {
         allPosts = postList;
         loadingPosts = false;
       });
     } catch (e) {
       debugPrint("💥 Error fetching posts: $e");
+      if (!mounted) return;
       setState(() => loadingPosts = false);
     }
   }
@@ -335,7 +338,7 @@ class GiveawayCard extends StatelessWidget {
                   child: Image.network(
                     imageUrl,
                     width: 100,
-                    height: 120,
+                    height: 110,
                     fit: BoxFit.cover,
                   ),
                 ),

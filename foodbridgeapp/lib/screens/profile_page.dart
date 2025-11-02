@@ -322,7 +322,7 @@ class _ProfilePageState extends State<ProfilePage> {
         print("distancekm: $distance");
 
         return {
-          // 'id': item['post_id'],
+          'id': item['post_id'],
           'image': imageUrl,
           'title': item['title'] ?? 'ไม่ระบุชื่อโพสต์',
           'location': (item['address'] == null || item['address'].toString().isEmpty)
@@ -551,12 +551,12 @@ class _ProfilePageState extends State<ProfilePage> {
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
                 GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const PostPage()),
-                    );
-                  },
+                  // onTap: () {
+                  //   Navigator.push(
+                  //     context,
+                  //     MaterialPageRoute(builder: (_) => const PostPage()),
+                  //   );
+                  // },
                   child: const Text(
                     'ดูทั้งหมด',
                     style: TextStyle(fontSize: 16, color: Colors.black),

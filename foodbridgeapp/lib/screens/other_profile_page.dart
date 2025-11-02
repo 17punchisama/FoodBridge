@@ -230,7 +230,7 @@ class _OtherProfilePageState extends State<OtherProfilePage> {
         print("distancekm: $distance");
 
         return {
-          // 'id': item['post_id'],
+          'id': item['post_id'].toString(),
           'image': imageUrl,
           'title': item['title'] ?? 'ไม่ระบุชื่อโพสต์',
           'location':
@@ -495,8 +495,8 @@ class _ItemCard extends StatelessWidget {
       onTap: () {
         Navigator.push(
           context,
-          // MaterialPageRoute(builder: (_) => const PostPage(PostId: item['id'])),
-          MaterialPageRoute(builder: (_) => const PostPage()),
+          MaterialPageRoute(builder: (_) => PostPage(postId: int.parse(item['id']!))),
+          // MaterialPageRoute(builder: (_) => const PostPage()),
         );
       },
       child: Container(
