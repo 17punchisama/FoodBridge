@@ -122,6 +122,10 @@ class _ViewMorePageState extends State<ViewMorePage> {
         for (final item in items) {
           final bool isGiveaway = item['is_giveaway'] == true || item['is_giveaway'] == 'true';
           if ((postType == 'free' && !isGiveaway) || (postType == 'sale' && isGiveaway)) continue;
+          if (postType == 'category' &&
+              (item['categories'] == null || item['categories'].isEmpty || item['categories'].first != widget.ownerId)) {
+            continue;
+          }
 
           final images = item['images'] ?? [];
           final imageUrl = (images.isNotEmpty && images.first is String)
@@ -155,13 +159,10 @@ class _ViewMorePageState extends State<ViewMorePage> {
 
           String queue = 'กำลังรอคิว - คน';
           String leftQueue = '';
-          if (bookingData['receiver_count'] != null) {
-            queue = 'กำลังรอคิว ${bookingData['receiver_count']} คน';
-            if (item['quantity'] != null) {
-              leftQueue =
-                  'คงเหลือ ${item['quantity'] - bookingData['receiver_count']} ที่';
-            }
-          }
+          int quantity = int.tryParse(item['quantity']?.toString() ?? '0') ?? 0;
+          int receiverCount = int.tryParse(bookingData['receiver_count']?.toString() ?? '0') ?? 0;
+          queue = 'กำลังรอคิว $receiverCount คน';
+          leftQueue = 'คงเหลือ ${quantity - receiverCount} ที่';
 
           bool isOpen = item['status'] == 'OPEN';
 
@@ -225,7 +226,7 @@ class _ViewMorePageState extends State<ViewMorePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'รายการแจกฟรีใกล้คุณ',
+              'รายการทั้งหมด',
               style: TextStyle(
                 color: Colors.black,
                 fontWeight: FontWeight.bold,
@@ -279,7 +280,7 @@ class _ViewMorePageState extends State<ViewMorePage> {
                             itemBuilder: (context, index) {
                               final item = filteredGiveaways[index];
                               return GiveawayCard(
-                                imageUrl: item['image'] ?? '',
+                                imageUrl: item['image'] ?? 'https://genconnect.com.sg/cdn/shop/files/Display.jpg?v=1684741232&width=1445',
                                 title: item['title'] ?? '-',
                                 kilo: item['kilo'] ?? '- km',
                                 owner: item['owner'] ?? '-',
@@ -340,6 +341,18 @@ class GiveawayCard extends StatelessWidget {
                     width: 100,
                     height: 110,
                     fit: BoxFit.cover,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return Image.network(
+                        'https://genconnect.com.sg/cdn/shop/files/Display.jpg?v=1684741232&width=1445',
+                        width: 100,
+                        height: 110,
+                        fit: BoxFit.cover,
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -349,7 +362,8 @@ class GiveawayCard extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          Flexible(
+                          SizedBox(
+                            width: 180,
                             child: Text(
                               title,
                               style: const TextStyle(
