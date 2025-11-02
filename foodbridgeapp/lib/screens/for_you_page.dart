@@ -15,6 +15,7 @@ import 'package:foodbridgeapp/verified_service.dart';
 import 'package:geocoding/geocoding.dart';
 import 'dart:async';
 
+import 'view_more_page.dart';
 class ForYouPage extends StatefulWidget {
   const ForYouPage({super.key});
 
@@ -188,6 +189,7 @@ class _ForYouPageState extends State<ForYouPage> {
           }
 
           final postMap = {
+            'id': item['post_id'].toString(),
             'image': imageUrl.toString(),
             'title': item['title'].toString(),
             'location':
@@ -291,7 +293,41 @@ class _ForYouPageState extends State<ForYouPage> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _HeaderRow(name: 'โพสต์ของฉัน'),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'รายการแจกฟรีใกล้ฉัน',
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ViewMorePage(
+                                type: 'free',      
+                                ownerId: '2', 
+                              ),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          width: 25,
+                          height: 25,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFF58319),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.arrow_forward_ios,
+                            color: Colors.white,
+                            size: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   PostPreviewSmall(items: allFreePosts),
                 ],
               ),
@@ -306,17 +342,30 @@ class _ForYouPageState extends State<ForYouPage> {
                   'Flash Sale ลดเดือดชั่วโมงนี้ ⚡',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
                 ),
-                Container(
-                  width: 25,
-                  height: 25,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF58319),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.arrow_forward_ios,
-                    color: Colors.white,
-                    size: 12,
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ViewMorePage(
+                          type: 'sale',      
+                          ownerId: '2', 
+                        ),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    width: 25,
+                    height: 25,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFF58319),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.arrow_forward_ios,
+                      color: Colors.white,
+                      size: 12,
+                    ),
                   ),
                 ),
               ],
@@ -330,122 +379,139 @@ class _ForYouPageState extends State<ForYouPage> {
                 itemCount: allSalePosts.length,
                 itemBuilder: (context, index) {
                   final flashItem = allSalePosts[index];
-                  return Container(
-                    width: 160,
-                    margin: const EdgeInsets.only(right: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: const [
-                        BoxShadow(color: Colors.black12, blurRadius: 8),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ClipRRect(
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(10),
-                            topRight: Radius.circular(10),
-                          ),
-                          child: Image.network(
-                            flashItem['image']!,
-                            width: 160,
-                            height: 140,
-                            fit: BoxFit.cover,
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return const Center(
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              );
-                            },
-                            errorBuilder: (context, error, stackTrace) {
-                              return Image.network(
-                                'https://genconnect.com.sg/cdn/shop/files/Display.jpg?v=1684741232&width=1445',
-                                width: 160,
-                                height: 140,
-                                fit: BoxFit.cover,
-                              );
-                            },
-                          ),
+                  return InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              PostPage(postId: int.parse(flashItem['id']!)),
                         ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
+                      );
+                    },
+                    child: Container(
+                      width: 160,
+                      margin: const EdgeInsets.only(right: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: const [
+                          BoxShadow(color: Colors.black12, blurRadius: 8),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ClipRRect(
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(10),
+                              topRight: Radius.circular(10),
+                            ),
+                            child: Image.network(
+                              flashItem['image']!,
+                              width: 160,
+                              height: 140,
+                              fit: BoxFit.cover,
+                              loadingBuilder:
+                                  (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return const Center(
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    );
+                                  },
+                              errorBuilder: (context, error, stackTrace) {
+                                return Image.network(
+                                  'https://genconnect.com.sg/cdn/shop/files/Display.jpg?v=1684741232&width=1445',
+                                  width: 160,
+                                  height: 140,
+                                  fit: BoxFit.cover,
+                                );
+                              },
+                            ),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              SizedBox(
-                                width: 140, // or whatever width fits your layout
-                                child: Text(
-                                  flashItem['title']!,
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                                ),
-                              ),
-                              Text(
-                                flashItem['shop']!,
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  color: Color(0xff828282),
-                                ),
-                              ),
-                              Row(
-                                children: [
-                                  SvgPicture.asset(
-                                    'assets/icons/location.svg',
-                                    width: 12,
-                                    height: 12,
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                SizedBox(
+                                  width:
+                                      140, // or whatever width fits your layout
+                                  child: Text(
+                                    flashItem['title']!,
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
-                                  const SizedBox(width: 3),
-                                  SizedBox(
-                                    width: 130, // or whatever width fits your layout
-                                    child: Text(
-                                      flashItem['location']!,
-                                      overflow: TextOverflow.ellipsis,
-                                      maxLines: 1,
+                                ),
+                                Text(
+                                  flashItem['shop']!,
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    color: Color(0xff828282),
+                                  ),
+                                ),
+                                Row(
+                                  children: [
+                                    SvgPicture.asset(
+                                      'assets/icons/location.svg',
+                                      width: 12,
+                                      height: 12,
+                                    ),
+                                    const SizedBox(width: 3),
+                                    SizedBox(
+                                      width:
+                                          130, // or whatever width fits your layout
+                                      child: Text(
+                                        flashItem['location']!,
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          color: Color(0xff828282),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Row(
+                                  children: [
+                                    SvgPicture.asset(
+                                      'assets/icons/bike.svg',
+                                      width: 10,
+                                      height: 10,
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      flashItem['kilo']!,
                                       style: const TextStyle(
                                         fontSize: 10,
                                         color: Color(0xff828282),
                                       ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                              Row(
-                                children: [
-                                  SvgPicture.asset(
-                                    'assets/icons/bike.svg',
-                                    width: 10,
-                                    height: 10,
-                                  ),
-                                  const SizedBox(width: 3),
-                                  Text(
-                                    flashItem['kilo']!,
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      color: Color(0xff828282),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Text(
-                                flashItem['price']!,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  color: Color(0xffED1429),
-                                  fontWeight: FontWeight.w700,
+                                  ],
                                 ),
-                              ),
-                            ],
+                                Text(
+                                  flashItem['price']!,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    color: Color(0xffED1429),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   );
                 },
@@ -454,10 +520,7 @@ class _ForYouPageState extends State<ForYouPage> {
             const SizedBox(height: 20),
             Text(
               "หมวดหมู่แนะนำ",
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             Row(
@@ -465,25 +528,19 @@ class _ForYouPageState extends State<ForYouPage> {
               children: categories_4.map((cat) {
                 return GestureDetector(
                   onTap: () {
-                    // Navigator.push(
-                    //   context,
-                    //   MaterialPageRoute(
-                    //     builder: (_) => CategoryPage(categoryLabel: cat['label']!),
-                    //   ),
-                    // );
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ViewMorePage(
+                                type: 'category',      
+                                ownerId: cat['label']!, 
+                              ),
+                      ),
+                    );
                   },
                   child: Column(
                     children: [
-                      Image.asset(
-                        cat['icon']!, 
-                        width: 50,
-                        height: 50,
-                      ),
-                      // SvgPicture.asset(
-                      //   cat['icon']!,
-                      //   width: 50,
-                      //   height: 50,
-                      // ),
+                      Image.asset(cat['icon']!, width: 50, height: 50),
                       const SizedBox(height: 4),
                       Text(
                         cat['label']!,
@@ -629,8 +686,10 @@ class _ItemCard extends StatelessWidget {
       onTap: () {
         Navigator.push(
           context,
-          // MaterialPageRoute(builder: (_) => const PostPage(PostId: item['id'])),
-          MaterialPageRoute(builder: (_) => const PostPage()),
+          MaterialPageRoute(
+            builder: (_) => PostPage(postId: int.parse(item['id']!)),
+          ),
+          // MaterialPageRoute(builder: (_) => const PostPage()),
         );
       },
       child: Container(

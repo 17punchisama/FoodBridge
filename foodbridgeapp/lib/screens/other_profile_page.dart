@@ -230,7 +230,7 @@ class _OtherProfilePageState extends State<OtherProfilePage> {
         print("distancekm: $distance");
 
         return {
-          // 'id': item['post_id'],
+          'id': item['post_id'].toString(),
           'image': imageUrl,
           'title': item['title'] ?? 'ไม่ระบุชื่อโพสต์',
           'location':
@@ -324,7 +324,7 @@ class _OtherProfilePageState extends State<OtherProfilePage> {
                           padding: EdgeInsets.only(left: 6),
                           child: Icon(
                             Icons.verified,
-                            color: Colors.orange,
+                            color: Color(0xFFF58319),
                             size: 22,
                           ),
                         ),
@@ -413,9 +413,16 @@ class _HeaderRow extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          name,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+        Flexible(
+          child: Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
         Container(
           width: 25,
@@ -495,8 +502,8 @@ class _ItemCard extends StatelessWidget {
       onTap: () {
         Navigator.push(
           context,
-          // MaterialPageRoute(builder: (_) => const PostPage(PostId: item['id'])),
-          MaterialPageRoute(builder: (_) => const PostPage()),
+          MaterialPageRoute(builder: (_) => PostPage(postId: int.parse(item['id']!))),
+          // MaterialPageRoute(builder: (_) => const PostPage()),
         );
       },
       child: Container(

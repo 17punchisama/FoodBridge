@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:foodbridgeapp/screens/notification_page.dart';
 import 'home_page.dart';
 import 'post_page.dart';
 import 'profile_page.dart';
@@ -33,10 +34,9 @@ class NavBar extends StatelessWidget {
             page = const HomePage();
             break;
           case 1:
-            page = const PostPage();
-            break;
+            page = const HomePage();
           case 2:
-            page = const PostPage();
+            page = const NotificationPage();
             break;
           case 3:
             page = const ProfilePage();

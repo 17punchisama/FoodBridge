@@ -20,10 +20,11 @@ enum UserStatus {
 }
 
 class PostPage extends StatefulWidget {
-  final int postId = 34; // example post id
-  const PostPage({super.key});
-  // final int postId;
-  // const PostPage({super.key, required this.postId});
+  // final int postId = 20; // example post id
+  // const PostPage({super.key});
+
+  final int postId;
+  const PostPage({super.key, required this.postId});
 
   @override
   State<PostPage> createState() => _PostPageState();
