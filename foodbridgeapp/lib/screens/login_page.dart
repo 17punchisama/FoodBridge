@@ -1,14 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:foodbridgeapp/screens/home_page.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'profile_page.dart';
+import 'notification_page.dart';
+import 'report_page.dart';
 import 'register_page.dart';
-import 'change_password_page.dart';
-import 'other_profile_page.dart';
-import 'home_page.dart';
-
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -18,27 +16,33 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final _loginController = TextEditingController();
+  final _loginController = TextEditingController();    // phone หรือ email ก็ได้
   final _passwordController = TextEditingController();
   final _storage = const FlutterSecureStorage();
+
   bool _isLoading = false;
+  bool _obscure = true;
 
   Future<void> _login() async {
+    final login = _loginController.text.trim();
+    final password = _passwordController.text;
+
     setState(() => _isLoading = true);
+    try {
+      final res = await http.post(
+        Uri.parse('https://foodbridge1.onrender.com/auth/login'),
+        // Uri.parse('http://10.0.2.2:1323/auth/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          "login": login,
+          "password": password,
+        }),
+      );
 
-    final response = await http.post(
-      Uri.parse('https://foodbridge1.onrender.com/auth/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        "login": _loginController.text,
-        "password": _passwordController.text,
-      }),
-    );
+      setState(() => _isLoading = false);
 
-    setState(() => _isLoading = false);
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
+      if (res.statusCode == 200) {
+      final data = jsonDecode(res.body);
       final token = data['token'];
 
       await _storage.write(key: 'token', value: token);
@@ -60,22 +64,50 @@ class _LoginPageState extends State<LoginPage> {
         await _storage.write(key: 'is_verified', value: isVerified.toString());
       }
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomePage()),
+      final profileRes = await http.get(
+        Uri.parse('https://foodbridge1.onrender.com/me'),
+        headers: {"Authorization": "Bearer $token"},
       );
-    } else {
-      final error = jsonDecode(response.body);
+
+      bool isVerified = false;
+      int? userId;
+      if (profileRes.statusCode == 200) {
+        final profileData = jsonDecode(profileRes.body);
+        isVerified = profileData['is_verified'] == true;
+        userId = profileData['user_id'];
+        print('User verified: $isVerified (ID: $userId)');
+
+        await _storage.write(key: 'user_id', value: userId.toString());
+        await _storage.write(key: 'is_verified', value: isVerified.toString());
+      }
+
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+      } else {
+        String message = 'เข้าสู่ระบบไม่สำเร็จ';
+        try {
+          final body = jsonDecode(res.body);
+          if (body is Map && body['message'] is String) {
+            message = body['message'];
+          }
+        } catch (_) {}
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error['message'] ?? 'Login failed')),
+        SnackBar(content: Text('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้: $e')),
       );
     }
   }
 
   void _loginWithGoogle() {
-    // Mock function: add your Google login implementation
+    // TODO: ใส่ Google Sign-In จริงภายหลัง
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Google login clicked!')),
+      const SnackBar(content: Text('ยังไม่รองรับ Google Login')),
     );
   }
 
@@ -83,229 +115,197 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Center(
+      body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 40.0),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Mock Logo
-              Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black26,
-                      offset: const Offset(0, 4),
-                      blurRadius: 10,
-                    ),
-                  ],
-                ),
-                child: const Icon(Icons.fastfood, size: 60, color: Colors.white),
-              ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 60),
 
-              // Welcome Text & Slogan
-              const Text(
-                'Welcome Back!',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Color.fromARGB(255, 3, 130, 99)
-                ),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Connect. Eat. Enjoy!',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.black,
-                ),
-              ),
-              const SizedBox(height: 30),
+              // Logo
+              const Text('logo',
+                  style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
 
-              // google login
+              // Welcome text
+              const Text('ยินดีต้อนรับสู่ Food Bridge',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+              const Text('สโลแกน',
+                  style: TextStyle(fontSize: 14, color: Colors.grey)),
+              const SizedBox(height: 40),
+
+              // Google Sign-In
               Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(15),
+                  borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black26,
-                      offset: const Offset(0, 1),
-                      blurRadius: 25,
+                      color: Colors.black.withOpacity(0.10),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
                     ),
                   ],
                 ),
                 child: ElevatedButton.icon(
                   onPressed: _loginWithGoogle,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black87,
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15)),
-                  ),
                   icon: SvgPicture.asset(
-                    'assets/icons/Google__G__logo.svg', // path should be a string!
-                    width: 24,
+                    'assets/icons/google_icon.svg',
                     height: 24,
                   ),
-                  label: const Text('Login with Google', style: TextStyle(fontSize: 16)),
-                ),
-              ),
-
-              const SizedBox(height: 20),
-              Divider(
-                color: Colors.black, // line color
-                thickness: 0.5,        // line thickness
-              ),
-
-              const SizedBox(height: 20),
-
-              Text(
-                'หรือ', 
-                style: TextStyle(
-                  fontSize: 18,            
-                  fontWeight: FontWeight.normal,
-                  color: const Color.fromARGB(255, 158, 158, 159),
-                ),
-                textAlign: TextAlign.center,
-              ),
-
-              const SizedBox(height: 20),
-
-              // Phone Field
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(15),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black26,
-                      offset: const Offset(0, 1),
-                      blurRadius: 25,
+                  label: const Text(
+                    'เข้าสู่ระบบด้วย Google',
+                    style: TextStyle(
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w500,
                     ),
-                  ],
-                ),
-                child: TextField(
-                  controller: _loginController,
-                  keyboardType: TextInputType.text,
-                  decoration: InputDecoration(
-                    labelText: 'Phone or Email',
-                    prefixIcon: Icon(Icons.phone),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(15),
-                      borderSide: BorderSide.none, // no border by default
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(15),
-                      borderSide: const BorderSide(color: Color.fromARGB(255, 3, 130, 99), width: 2),
-                    ),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 18),
                   ),
-                ),
-              ),
-              const SizedBox(height: 15),
-
-              // Password Field
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(15),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black26,
-                      offset: const Offset(0, 1),
-                      blurRadius: 25,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    shadowColor: Colors.transparent,
+                    elevation: 0,
+                    minimumSize: const Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                  ],
-                ),
-                child: TextField(
-                  controller: _passwordController,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    prefixIcon: Icon(Icons.lock),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(15),
-                      borderSide: BorderSide.none, // no border by default
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(15),
-                      borderSide: const BorderSide(color: Color.fromARGB(255, 3, 130, 99), width: 2),
-                    ),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 18),
                   ),
                 ),
               ),
 
-              // Change Password Link
+              const SizedBox(height: 30),
+
+              const Divider(thickness: 1),
+              const SizedBox(height: 8),
+              const Text('หรือ',
+                  style: TextStyle(fontSize: 14, color: Colors.grey)),
+              const SizedBox(height: 30),
+
+              // Login
+              TextField(
+                controller: _loginController,
+                decoration: InputDecoration(
+                  hintText: 'ชื่อผู้ใช้',
+                  filled: true,
+                  fillColor: const Color(0xFFF5F5F5),
+                  contentPadding:
+                      const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Password
+              TextField(
+                controller: _passwordController,
+                obscureText: _obscure,
+                decoration: InputDecoration(
+                  hintText: 'รหัสผ่าน',
+                  filled: true,
+                  fillColor: const Color(0xFFF5F5F5),
+                  contentPadding:
+                      const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                  suffixIcon: IconButton(
+                    icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility,
+                        color: Colors.grey),
+                    onPressed: () => setState(() => _obscure = !_obscure),
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              // Sign up link
               Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const ChangePasswordPage()),
-                    );
-                  },
-                  child: const Text(
-                    'Forgot password?',
-                    style: TextStyle(fontSize: 12, color: Color.fromARGB(255, 3, 130, 99)),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 15),
-
-              // Login Button
-              _isLoading
-                  ? const CircularProgressIndicator()
-                  : Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(15),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black26,
-                            offset: const Offset(0, 1),
-                            blurRadius: 25,
-                          ),
-                        ],
-                      ),
-                      child: ElevatedButton(
-                        onPressed: _login,
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 15),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(15)),
-                          backgroundColor: Color.fromARGB(255, 3, 130, 99),
-                        ),
-                        child: const Text(
-                          'Login',
-                          style: TextStyle(fontSize: 18, color: Colors.white),
+                alignment: Alignment.centerLeft,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('ไม่มีบัญชีผู้ใช้ใช่หรือไม่? '),
+                    const SizedBox(width: 10),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => const RegisterPage()),
+                        );
+                      },
+                      child: const Text(
+                        'สมัครเลย',
+                        style: TextStyle(
+                          decoration: TextDecoration.underline,
+                          color: Colors.teal,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
-              const SizedBox(height: 15),
+                  ],
+                ),
+              ),
 
-              // Register Link
+              const SizedBox(height: 26),
+
+              // Login button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _login,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.teal[700],
+                    minimumSize: const Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          'เข้าสู่ระบบ',
+                          style: TextStyle(color: Colors.white, fontSize: 16),
+                        ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Forgot password
               Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.start,
                 children: [
-                  const Text('Don\'t have an account?', style: TextStyle(fontSize: 12)),
+                  const Text('คุณลืมรหัสผ่านใช่หรือไม่? '),
                   TextButton(
                     onPressed: () {
+                      // TODO: ลืมรหัสผ่าน
                       Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const RegisterPage()),
-                      );
+                          context,
+                          MaterialPageRoute(
+                              // builder: (context) => const ReportPage(postId: 6,)),
+                              builder: (context) => const NotificationPage()) ,
+                        );
                     },
-                    child: const Text('Register', style: TextStyle(fontSize: 12, color: Color.fromARGB(255, 3, 130, 99))),
+                    child: const Text(
+                      'ลืมรหัสผ่าน',
+                      style: TextStyle(
+                        decoration: TextDecoration.underline,
+                        color: Colors.teal,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ],
               ),
