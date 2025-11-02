@@ -408,8 +408,8 @@ class GiveawayCard extends StatelessWidget {
                               vertical: 3,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.red[400],
-                              borderRadius: BorderRadius.circular(8),
+                              color: Colors.red,
+                              borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
                               category,
@@ -432,14 +432,14 @@ class GiveawayCard extends StatelessWidget {
                             ),
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              border: Border.all(color: Colors.orange),
+                              border: Border.all(color: Color(0xFFF58319)),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
                               leftQueue,
                               style: const TextStyle(
                                 fontSize: 12,
-                                color: Colors.orange,
+                                color: Color(0xFFF58319),
                               ),
                             ),
                           ),
@@ -450,7 +450,7 @@ class GiveawayCard extends StatelessWidget {
                               vertical: 3,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.orange,
+                              color: Color(0xFFF58319),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
@@ -476,13 +476,13 @@ class GiveawayCard extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: isOpen ? Colors.green.shade100 : Colors.red[100],
+                color: isOpen ? Color.fromARGB(255, 3, 130, 99): Colors.red,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
                 isOpen ? 'เปิดจอง' : 'ปิดจอง',
                 style: TextStyle(
-                  color: isOpen ? Colors.green : Colors.red,
+                  color: isOpen ? Colors.white : Colors.white,
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                 ),
