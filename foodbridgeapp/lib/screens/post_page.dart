@@ -9,6 +9,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:foodbridgeapp/verified_service.dart';
+import 'package:foodbridgeapp/screens/vertify_id_page.dart';
 
 
 // Enum to track user verification and reservation status
@@ -21,7 +22,6 @@ enum UserStatus {
 class PostPage extends StatefulWidget {
   final int postId = 34; // example post id
   const PostPage({super.key});
-
   // final int postId;
   // const PostPage({super.key, required this.postId});
 
@@ -78,6 +78,7 @@ class _PostPageState extends State<PostPage> {
   int? userQuotaLeft;
 
   int? currentBookingId;
+  String? currentQrToken;
   int? postCloseTimeUnix;
 
   Future<void> _fetchPostData() async {
@@ -116,6 +117,9 @@ class _PostPageState extends State<PostPage> {
         });
 
         await _fetchReceiverCount();
+        await _checkExistingBooking();
+        final closeTime = DateTime.fromMillisecondsSinceEpoch(postCloseTimeUnix! * 1000);
+        _startCountdown(closeTime);
 
         // Move map to post location
         if (postLat != null && postLng != null && _mapController != null) {
@@ -175,18 +179,111 @@ class _PostPageState extends State<PostPage> {
     }
   }
 
+  Future<void> _fetchQrToken(int bookingId, int? closeTimeUnix) async {
+    const storage = FlutterSecureStorage();
+    final token = await storage.read(key: 'token');
+    if (token == null) return;
+    try {
+      int ttlSeconds = 600; // default 10 minutes
+
+      if (closeTimeUnix != null) {
+        final closeTime = DateTime.fromMillisecondsSinceEpoch(closeTimeUnix * 1000);
+        _startCountdown(closeTime);
+        final now = DateTime.now();
+        final diff = closeTime.difference(now).inSeconds;
+        if (diff > 0) {
+          ttlSeconds = diff;
+        }
+      }
+
+      final response = await http.post(
+        Uri.parse('https://foodbridge1.onrender.com/bookings/$bookingId/qr'),
+        headers: {
+          "Authorization": "Bearer $token",
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode({"ttl_seconds": ttlSeconds}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final newToken = data['token'];
+        setState(() {
+          currentQrToken = newToken;
+        });
+        print("QR Token refreshed: $newToken");
+      } else {
+        print("Failed to refresh QR token: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("Error fetching QR token: $e");
+    }
+  }
+
 
   Future<void> _fetchUserVerificationStatus() async {
-  final user = await VerifiedService.getCurrentUser();
-  if (user == null) return;
+    final user = await VerifiedService.getCurrentUser();
+    if (user == null) return;
 
-  setState(() {
-    userId = user['user_id'].toString();
-    userStatus = user['is_verified'] == true
-        ? UserStatus.verifiedNoReservation
-        : UserStatus.notVerified;
-  });
-}
+    setState(() {
+      userId = user['user_id'].toString();
+      userStatus = user['is_verified'] == true
+          ? UserStatus.verifiedNoReservation
+          : UserStatus.notVerified;
+    });
+  }
+
+  Future<void> _checkExistingBooking() async {
+    const storage = FlutterSecureStorage();
+    final token = await storage.read(key: 'token');
+    if (token == null) return;
+
+    try {
+      final response = await http.get(
+        Uri.parse('https://foodbridge1.onrender.com/bookings?post_id=${widget.postId}'),
+        headers: {
+          "Authorization": "Bearer $token",
+          "Content-Type": "application/json",
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final items = data['items'] as List<dynamic>;
+
+        for (final item in items) {
+          final status = item['status'] as String?;
+          if (status == 'PENDING' || status == 'QUEUED') {
+            final bookingId = item['booking_id'];
+            final qrToken = item['qr_token'];
+
+            setState(() {
+              currentBookingId = bookingId;
+              userStatus = UserStatus.verifiedWithReservation;
+            });
+
+            if (qrToken != null && qrToken.toString().isNotEmpty) {
+              setState(() => currentQrToken = qrToken);
+              print("Found existing QR token: $qrToken");
+            } else {
+              await _fetchQrToken(bookingId,postCloseTimeUnix); // generate new QR if missing
+            }
+            return;
+          }
+        }
+
+        setState(() {
+          userStatus = UserStatus.verifiedNoReservation;
+          currentBookingId = null;
+          currentQrToken = null;
+        });
+      } else {
+        print("Failed to check booking: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("Error checking existing booking: $e");
+    }
+  }
 
   String _formatTimeRange(int? open,  int? close) {
     if (open == null || close == null) return '-';
@@ -744,7 +841,7 @@ class _PostPageState extends State<PostPage> {
                       ),
                       const SizedBox(height: 12),
                       QrImageView(
-                        data: reservationId ?? '',
+                        data: currentQrToken ?? '',
                         version: QrVersions.auto,
                         size: 150,
                         backgroundColor: Colors.white,
@@ -762,7 +859,7 @@ class _PostPageState extends State<PostPage> {
                         ),
                       const SizedBox(height: 12),
                       Text(
-                        'รหัสจอง: $reservationId',
+                        'รหัสจอง: $currentQrToken',
                         style: const TextStyle(
                           fontSize: 14,
                           color: Colors.grey,
@@ -1119,18 +1216,24 @@ class _PostPageState extends State<PostPage> {
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
                       Navigator.pop(context);
-                      // Navigate to verification page
+                      // Navigate to VerifyIDPage
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const VerifyIDPage()),
+                      );
                       setState(() {
                         userStatus = UserStatus.verifiedNoReservation;
                       });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('ยืนยันตัวตนสำเร็จ!'),
-                          backgroundColor: Color(0xFF038263),
+                      // mock up update verification status if verified
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('ยืนยันตัวตนสำเร็จ!'),
+                            backgroundColor: Color(0xFF038263),
                         ),
                       );
+                      
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF00897B),
