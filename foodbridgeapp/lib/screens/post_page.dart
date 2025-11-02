@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 
 import 'package:foodbridgeapp/verified_service.dart';
 import 'package:foodbridgeapp/screens/vertify_id_page.dart';
+import 'package:foodbridgeapp/screens/other_profile_page.dart';
 
 
 // Enum to track user verification and reservation status
@@ -38,7 +39,7 @@ class _PostPageState extends State<PostPage> {
   UserStatus userStatus = UserStatus.verifiedNoReservation;
 
   // location data
-  double latitude = 13.7563;  // initial value
+  double latitude = 13.7563;  // initiarl value
   double longitude = 100.5018; // initial value
   double? _distanceKm;
 
@@ -728,53 +729,66 @@ class _PostPageState extends State<PostPage> {
                                 ],
                               ),
                             ),
-                            
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              margin: const EdgeInsets.only(bottom: 16),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: Color(0xFF038263).withOpacity(0.1),
-                                      shape: BoxShape.circle,
+                            GestureDetector(
+                              onTap: () {
+                                if (providerId != null) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => OtherProfilePage(userId: providerId!),
                                     ),
-                                    child: Icon(
-                                      Icons.phone,
-                                      color: Color(0xFF038263),
-                                      size: 20,
+                                  );
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                margin: const EdgeInsets.only(bottom: 16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.grey.withOpacity(0.1),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
                                     ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
+                                  ],
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue[50],
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.person,
+                                        color: Colors.blue[600],
+                                        size: 20,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          providerName ?? 'กำลังโหลด...',
+                                          providerName ?? 'ไม่ทราบชื่อผู้ให้',
                                           style: const TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.bold,
                                           ),
                                         ),
-                                        const SizedBox(height: 4),
                                         Text(
                                           providerPhone ?? '-',
                                           style: const TextStyle(fontSize: 15, color: Colors.black87),
                                         ),
                                       ],
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-
-
+                            ),  
                           ],
                         ),
                       ),
