@@ -41,25 +41,19 @@ class _PostPageState extends State<PostPage> {
   double latitude = 13.7563;  // initial value
   double longitude = 100.5018; // initial value
   double? _distanceKm;
-  // String? _district;
-  // String? _province;
-  // post data
-  // final String status = 'เปิดจอง'; // e.g. "ปิดแล้ว"
-  // final String freeLabel = 'ฟรี';
-  // final int availableCount = 10;
-  // final String menuName = 'แจกข้าวมันไก่ 30 ที่';
-  // final String address = '408/138 อาคารพหลโยธินเพลส ชั้น 32';
-  // final String openStatus = 'Open'; // or "Open"
-  // final String openTime = '9.00 - 12.00';
-  // final String contactPhone = '088-888-8888';
+
   final String imagePath = 'assets/images/savory_img.png';
   String? status;
-  String? freeLabel;
 
   int remainingCount = 0;
   int receiverCount = 0;
   int totalQuantity = 0 ; // backend total quantity
-
+  
+  bool isGiveaway = false;
+  int? price;
+  int? providerId;
+  String? providerName;
+  String? providerPhone;
   String? imageUrl;
   String? menuName;
   String? address;
@@ -68,7 +62,6 @@ class _PostPageState extends State<PostPage> {
   String openTimeFormatted = '-';
   String closeTimeFormatted = '-';
   String? contactPhone;
-  // String? imageUrl;
   double? postLat;
   double? postLng;
   String? district;
@@ -100,10 +93,12 @@ class _PostPageState extends State<PostPage> {
 
         setState(() {
           status = data['status'] ?? 'เปิดจอง';
-          freeLabel = data['is_giveaway'] == true ? 'ฟรี' : '';
+          isGiveaway = data['is_giveaway'] ?? false;
+          price = data['price'];
           totalQuantity = data['quantity'] ?? 0;
           menuName = data['title'] ?? '-';
           address = data['address'] ?? '-';
+          providerId = data['provider_id'];
           if (data['images'] != null && data['images'].isNotEmpty) {
             imageUrl = data['images'][0];
           } else {
@@ -125,6 +120,7 @@ class _PostPageState extends State<PostPage> {
 
         await _fetchReceiverCount();
         await _checkExistingBooking();
+        await _fetchProviderData(providerId!);
         final closeTime = DateTime.fromMillisecondsSinceEpoch(postCloseTimeUnix! * 1000);
         _startCountdown(closeTime);
 
@@ -150,6 +146,32 @@ class _PostPageState extends State<PostPage> {
       }
     } catch (e) {
       print('Error fetching post: $e');
+    }
+  }
+  Future<void> _fetchProviderData(int id) async {
+    const storage = FlutterSecureStorage();
+    final token = await storage.read(key: 'token');
+
+    try {
+      final response = await http.get(
+        Uri.parse('https://foodbridge1.onrender.com/users/$id'),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final userData = jsonDecode(response.body);
+        setState(() {
+          providerName = userData['full_name'] ?? 'ไม่ทราบชื่อผู้ให้';
+          providerPhone = userData['phone'] ?? '-';
+        });
+      } else {
+        print('Failed to load provider data: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error fetching provider data: $e');
     }
   }
 
@@ -417,7 +439,7 @@ class _PostPageState extends State<PostPage> {
                       ),
                       child: (imageUrl != null && imageUrl!.isNotEmpty)
                           ? Image.network(
-                              imageUrl!, // ✅ from backend
+                              imageUrl!, // from backend
                               width: double.infinity,
                               height: 280,
                               fit: BoxFit.cover,
@@ -511,9 +533,13 @@ class _PostPageState extends State<PostPage> {
                                   Row(
                                     children: [
                                       Text(
-                                        freeLabel ?? '', // backend
+                                        isGiveaway
+                                            ? 'ฟรี'
+                                            : (price != null && price! > 0
+                                                ? '฿$price'
+                                                : '-'), // fallback if no price
                                         style: TextStyle(
-                                          color: Colors.red,
+                                          color: Colors.red ,
                                           fontSize: 24,
                                           fontWeight: FontWeight.bold,
                                         ),
@@ -725,11 +751,23 @@ class _PostPageState extends State<PostPage> {
                                     ),
                                   ),
                                   const SizedBox(width: 12),
-                                  Text(
-                                    contactPhone ?? '', // backend
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w500,
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          providerName ?? 'กำลังโหลด...',
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          providerPhone ?? '-',
+                                          style: const TextStyle(fontSize: 15, color: Colors.black87),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ],
