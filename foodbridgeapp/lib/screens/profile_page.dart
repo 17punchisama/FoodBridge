@@ -424,7 +424,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                 padding: EdgeInsets.only(left: 6),
                                 child: Icon(
                                   Icons.verified,
-                                  color: Colors.orange,
+                                  color: Color(0xFFF58319),
                                   size: 22,
                                 ),
                               ),
