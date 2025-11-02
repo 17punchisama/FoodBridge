@@ -64,6 +64,23 @@ class _LoginPageState extends State<LoginPage> {
         await _storage.write(key: 'is_verified', value: isVerified.toString());
       }
 
+      final profileRes = await http.get(
+        Uri.parse('https://foodbridge1.onrender.com/me'),
+        headers: {"Authorization": "Bearer $token"},
+      );
+
+      bool isVerified = false;
+      int? userId;
+      if (profileRes.statusCode == 200) {
+        final profileData = jsonDecode(profileRes.body);
+        isVerified = profileData['is_verified'] == true;
+        userId = profileData['user_id'];
+        print('User verified: $isVerified (ID: $userId)');
+
+        await _storage.write(key: 'user_id', value: userId.toString());
+        await _storage.write(key: 'is_verified', value: isVerified.toString());
+      }
+
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
