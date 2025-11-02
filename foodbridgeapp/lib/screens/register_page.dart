@@ -44,12 +44,12 @@ class _RegisterPageState extends State<RegisterPage> {
     return;
   }
 
-  // if (!RegExp(r'[@]').hasMatch(email)) {
-  //   ScaffoldMessenger.of(context).showSnackBar(
-  //     const SnackBar(content: Text('กรุณากรอกข้อมูล email')),
-  //   );
-  //   return;
-  // }
+  if (!RegExp(r'[@]').hasMatch(email)) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('กรุณากรอกข้อมูล email')),
+    );
+    return;
+  }
 
   if (password.length < 8) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -124,7 +124,6 @@ class _RegisterPageState extends State<RegisterPage> {
     );
   }
 }
-
 
   @override
   Widget build(BuildContext context) {

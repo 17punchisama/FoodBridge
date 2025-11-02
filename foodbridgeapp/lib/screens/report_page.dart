@@ -17,11 +17,43 @@ class _ReportPageState extends State<ReportPage> {
   final TextEditingController titleController = TextEditingController();
   final TextEditingController detailController = TextEditingController();
   final List<String> selectedTypes = [];
-  final List<File> imageFiles = []; // <-- changed from imageUrls to File list
+  final List<File> imageFiles = [];
   bool isLoading = false;
   final picker = ImagePicker();
 
-  /// 🧾 Submit report
+  // Upload each image to /me/uploads/images and return the list of URLs
+  Future<List<String>> _uploadImages(String token) async {
+    List<String> uploadedUrls = [];
+
+    for (var file in imageFiles) {
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('https://foodbridge1.onrender.com/me/uploads/images'),
+      );
+      request.headers['Authorization'] = 'Bearer $token';
+      request.files.add(await http.MultipartFile.fromPath(
+        'file',
+        file.path,
+        filename: file.path.split('/').last,
+      ));
+
+      var response = await request.send();
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final respStr = await response.stream.bytesToString();
+        final data = jsonDecode(respStr);
+        if (data['url'] != null) {
+          uploadedUrls.add(data['url']);
+        } else if (data['path'] != null) {
+          uploadedUrls.add(data['path']);
+        }
+      } else {
+        debugPrint('Failed to upload ${file.path}');
+      }
+    }
+
+    return uploadedUrls;
+  }
+
   Future<void> submitReport() async {
     if (titleController.text.isEmpty || detailController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -40,19 +72,20 @@ class _ReportPageState extends State<ReportPage> {
       return;
     }
 
-    // For now, just send filenames — you could upload them separately if API supports
-    final images = imageFiles.map((file) => file.path).toList();
-
-    final body = {
-      "title": titleController.text.trim(),
-      "types": selectedTypes,
-      "detail": detailController.text.trim(),
-      "images": images,
-    };
-
     setState(() => isLoading = true);
 
     try {
+      // Step 1: Upload images first
+      final uploadedUrls = await _uploadImages(token);
+
+      // Step 2: Create report
+      final body = {
+        "title": titleController.text.trim(),
+        "types": selectedTypes,
+        "detail": detailController.text.trim(),
+        "images": uploadedUrls,
+      };
+
       final response = await http.post(
         Uri.parse("https://foodbridge1.onrender.com/posts/${widget.postId}/reports"),
         headers: {
@@ -86,7 +119,7 @@ class _ReportPageState extends State<ReportPage> {
     }
   }
 
-  /// 📸 Pick image from gallery or camera
+  // Pick image from gallery or camera
   Future<void> _pickImage(ImageSource source) async {
     final pickedFile = await picker.pickImage(source: source, imageQuality: 75);
     if (pickedFile != null) {
@@ -96,7 +129,7 @@ class _ReportPageState extends State<ReportPage> {
     }
   }
 
-  /// 🧱 Choose source dialog
+  // Choose source dialog
   void _showImageSourceDialog() {
     showModalBottomSheet(
       context: context,

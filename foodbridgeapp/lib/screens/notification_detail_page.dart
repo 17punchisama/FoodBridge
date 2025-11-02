@@ -32,6 +32,7 @@ class _NotificationDetailPageState extends State<NotificationDetailPage> {
 
   Future<void> loadDetails() async {
     final token = await storage.read(key: 'token');
+    // final token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NjIyMjc0MDksInJvbGUiOiJVU0VSIiwidWlkIjoyfQ.wgxcI6YlrWBQS0TILjijFUygE4X_ZTz1OcU8T632Ru0';
     if (token == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -44,8 +44,10 @@ class _LoginPageState extends State<LoginPage> {
       if (res.statusCode == 200) {
       final data = jsonDecode(res.body);
       final token = data['token'];
+      // final token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NjIyMjc0MDksInJvbGUiOiJVU0VSIiwidWlkIjoyfQ.wgxcI6YlrWBQS0TILjijFUygE4X_ZTz1OcU8T632Ru0';
 
       await _storage.write(key: 'token', value: token);
+      print('Response body: ${res.body}');
 
       final profileRes = await http.get(
         Uri.parse('https://foodbridge1.onrender.com/me'),
@@ -63,24 +65,7 @@ class _LoginPageState extends State<LoginPage> {
         await _storage.write(key: 'user_id', value: userId.toString());
         await _storage.write(key: 'is_verified', value: isVerified.toString());
       }
-
-      final profileRes = await http.get(
-        Uri.parse('https://foodbridge1.onrender.com/me'),
-        headers: {"Authorization": "Bearer $token"},
-      );
-
-      bool isVerified = false;
-      int? userId;
-      if (profileRes.statusCode == 200) {
-        final profileData = jsonDecode(profileRes.body);
-        isVerified = profileData['is_verified'] == true;
-        userId = profileData['user_id'];
-        print('User verified: $isVerified (ID: $userId)');
-
-        await _storage.write(key: 'user_id', value: userId.toString());
-        await _storage.write(key: 'is_verified', value: isVerified.toString());
-      }
-
+      
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
@@ -294,8 +279,8 @@ class _LoginPageState extends State<LoginPage> {
                       Navigator.push(
                           context,
                           MaterialPageRoute(
-                              // builder: (context) => const ReportPage(postId: 6,)),
-                              builder: (context) => const NotificationPage()) ,
+                              builder: (context) => const ReportPage(postId: 6,)),
+                              // builder: (context) => const NotificationPage()) ,
                         );
                     },
                     child: const Text(
