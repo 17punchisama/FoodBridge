@@ -106,7 +106,7 @@ class _OtherProfilePageState extends State<OtherProfilePage> {
         return {
           'image': images.isNotEmpty
               ? images.first
-              : 'assets/images/dessert_img.png',
+              : 'https://www.shutterstock.com/image-vector/avatar-gender-neutral-silhouette-vector-600nw-2470054311.jpg',
           // 'image': 'assets/images/dessert_img.png',
           'title': item['title'] ?? 'ไม่ระบุชื่อโพสต์',
           'location': item['address'] ?? 'ไม่ระบุสถานที่',
@@ -411,6 +411,18 @@ class _ItemCard extends StatelessWidget {
       width: 160,
       height: 80,
       fit: BoxFit.cover,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+      },
+      errorBuilder: (context, error, stackTrace) {
+        return Image.network(
+          'https://www.shutterstock.com/image-vector/avatar-gender-neutral-silhouette-vector-600nw-2470054311.jpg',
+          width: 160,
+          height: 80,
+          fit: BoxFit.cover,
+        );
+      },
     ),
   );
 
