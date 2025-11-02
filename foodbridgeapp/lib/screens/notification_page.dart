@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'notification_detail_page.dart';
 
 class NotificationPage extends StatefulWidget {
   const NotificationPage({super.key});
@@ -15,6 +16,7 @@ class _NotificationPageState extends State<NotificationPage> {
   final storage = const FlutterSecureStorage();
   late Future<List<Map<String, dynamic>>> _future;
   final Map<int, String> postTitleCache = {};
+  bool _isDeletingAll = false;
 
   @override
   void initState() {
@@ -22,7 +24,7 @@ class _NotificationPageState extends State<NotificationPage> {
     loadNotifications();
   }
 
-  ///  Fetch notifications
+  /// Fetch notifications
   Future<List<Map<String, dynamic>>> fetchNotifications(String token) async {
     final url = Uri.parse('https://foodbridge1.onrender.com/notifications');
     final res = await http.get(url, headers: {
@@ -39,20 +41,15 @@ class _NotificationPageState extends State<NotificationPage> {
     return [];
   }
 
-  ///  Fetch post data — for title clarity
+  /// Fetch post title for clarity
   Future<String?> fetchPostTitle(int postId, String token) async {
-    // Use cache to avoid duplicate network calls
-    if (postTitleCache.containsKey(postId)) {
-      return postTitleCache[postId];
-    }
-
+    if (postTitleCache.containsKey(postId)) return postTitleCache[postId];
     try {
       final url = Uri.parse('https://foodbridge1.onrender.com/posts/$postId');
       final res = await http.get(url, headers: {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
       });
-
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final title = data['title'] ?? '-';
@@ -66,15 +63,14 @@ class _NotificationPageState extends State<NotificationPage> {
   }
 
   void loadNotifications() async {
-    // final token = await storage.read(key: 'token');
-    const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NjIyMjc0MDksInJvbGUiOiJVU0VSIiwidWlkIjoyfQ.wgxcI6YlrWBQS0TILjijFUygE4X_ZTz1OcU8T632Ru0';
+    final token = await storage.read(key: 'token');
     if (token == null) return;
     setState(() {
       _future = fetchNotifications(token);
     });
   }
 
-  ///  Normalize type name for display
+  /// Normalize type
   String normalizeType(String type) {
     if (type.isEmpty) return 'UNKNOWN';
     if (type.contains('.')) {
@@ -85,21 +81,23 @@ class _NotificationPageState extends State<NotificationPage> {
     return type.toUpperCase();
   }
 
-  ///  Select icon
+  /// Select icon
   String iconPathForType(String type) {
     switch (type.toUpperCase()) {
+      case 'CREATED':
+        return 'assets/icons/pending.svg';
       case 'PENDING':
-        return 'assets/icons/new_pending.svg';
+        return 'assets/icons/pending.svg';
       case 'CANCELLED':
-        return 'assets/icons/new_cancelled.svg';
-      case 'CONFIRMED':
-        return 'assets/icons/new_excepted.svg';
+        return 'assets/icons/cancelled.svg';
+      case 'COMPLETED':
+        return 'assets/icons/accept.svg';
       default:
-        return 'assets/icons/new_expired.svg';
+        return 'assets/icons/expired.svg';
     }
   }
 
-  ///  Format Thai date
+  /// Format Thai date
   String formatThaiDate(DateTime date) {
     final now = DateTime.now();
     final diff = now.difference(date);
@@ -122,13 +120,89 @@ class _NotificationPageState extends State<NotificationPage> {
     return '${date.day} ${months[date.month - 1]}';
   }
 
+  /// delete all
+  Future<void> _confirmAndDeleteAll() async {
+    if (_isDeletingAll) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('ลบการแจ้งเตือนทั้งหมด?'),
+        content: const Text('คุณต้องการลบการแจ้งเตือนทั้งหมดหรือไม่'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('ยกเลิก'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('ลบทั้งหมด'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final token = await storage.read(key: 'token');
+    if (token == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('กรุณาเข้าสู่ระบบก่อน')),
+      );
+      return;
+    }
+
+    setState(() => _isDeletingAll = true);
+    try {
+      // Adjust this path if your backend uses a different one
+      final url = Uri.parse('https://foodbridge1.onrender.com/notifications');
+      final res = await http.delete(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (!mounted) return;
+
+      if (res.statusCode == 200 || res.statusCode == 204) {
+        // Clear UI right away
+        setState(() {
+          _future = Future.value(<Map<String, dynamic>>[]);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ลบการแจ้งเตือนทั้งหมดแล้ว')),
+        );
+      } else {
+        String msg = 'ลบไม่สำเร็จ (${res.statusCode})';
+        try {
+          final j = jsonDecode(res.body);
+          if (j is Map && j['message'] is String) msg = j['message'];
+        } catch (_) {}
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg)),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isDeletingAll = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+
       appBar: AppBar(
         automaticallyImplyLeading: false,
-
         title: const Text(
           'การแจ้งเตือน',
           style: TextStyle(
@@ -138,20 +212,28 @@ class _NotificationPageState extends State<NotificationPage> {
         ),
         backgroundColor: Colors.white,
         elevation: 0,
-
         actions: [
           IconButton(
-          icon: const Icon(Icons.delete),
-          onPressed: () {
-            // TODO: add delete action here
-          },
-        ),
+            tooltip: 'ลบทั้งหมด',
+            onPressed: _isDeletingAll ? null : _confirmAndDeleteAll,
+            icon: _isDeletingAll
+                ? const Padding(
+                    padding: EdgeInsets.all(10.0),
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : const Icon(Icons.delete, color: Colors.black54),
+          ),
         ],
       ),
+
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _future,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting && !_isDeletingAll) {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
@@ -176,15 +258,55 @@ class _NotificationPageState extends State<NotificationPage> {
               final DateTime createdAt =
                   DateTime.tryParse(n['created_at'] ?? '') ?? DateTime.now();
               final int? postId = n['data']?['post_id'];
-
               final iconPath = iconPathForType(type);
 
               return InkWell(
-                onTap: () {
+                onTap: () async {
+                  if (postId == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('ไม่มีข้อมูลโพสต์สำหรับการแจ้งเตือนนี้')),
+                    );
+                    return;
+                  }
+
+                  final token = await storage.read(key: 'token');
+                  if (token == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('กรุณาเข้าสู่ระบบก่อน')),
+                    );
+                    return;
+                  }
+
+                  // Optimistic: mark read visually
+                  try {
+                    list[i]['is_read'] = true;
+                    (context as Element).markNeedsBuild(); // refresh this tile
+                    final url = Uri.parse(
+                        'https://foodbridge1.onrender.com/notifications/$id/read');
+                    await http.patch(
+                      url,
+                      headers: {
+                        'Authorization': 'Bearer $token',
+                        'Content-Type': 'application/json',
+                      },
+                    );
+                  } catch (_) {}
+
+                  final refresh = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => NotificationDetailPage(
+                        id: id,
+                        postId: postId,
+                      ),
+                    ),
+                  );
+                  if (refresh == true) {
+                    loadNotifications();
+                  }
                 },
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -209,7 +331,6 @@ class _NotificationPageState extends State<NotificationPage> {
                       ),
                       const SizedBox(width: 12),
 
-                      ///  Notification Text Block
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -227,8 +348,6 @@ class _NotificationPageState extends State<NotificationPage> {
                               body,
                               style: const TextStyle(color: Colors.black87),
                             ),
-
-                            ///  Fetch and display post title below
                             if (postId != null)
                               FutureBuilder<String?>(
                                 future: storage.read(key: 'token').then(
@@ -236,23 +355,20 @@ class _NotificationPageState extends State<NotificationPage> {
                                       ? fetchPostTitle(postId, token)
                                       : null,
                                 ),
-                                builder: (context, snapshot) {
-                                  if (snapshot.connectionState ==
-                                      ConnectionState.waiting) {
+                                builder: (context, snap) {
+                                  if (snap.connectionState == ConnectionState.waiting) {
                                     return const Text(
                                       'กำลังโหลดโพสต์...',
-                                      style: TextStyle(
-                                          fontSize: 12, color: Colors.grey),
+                                      style: TextStyle(fontSize: 12, color: Colors.grey),
                                     );
                                   }
-                                  // if (snapshot.hasData &&
-                                  //     snapshot.data != null) {
-                                  //   return Text(
-                                  //     'โพสต์: ${snapshot.data}',
-                                  //     style: const TextStyle(
-                                  //         fontSize: 12, color: Colors.black54),
-                                  //   );
-                                  // }
+                                  if ((snap.data ?? '').isNotEmpty) {
+                                    return Text(
+                                      'โพสต์: ${snap.data}',
+                                      style: const TextStyle(
+                                          fontSize: 12, color: Colors.black54),
+                                    );
+                                  }
                                   return const SizedBox.shrink();
                                 },
                               ),
@@ -260,15 +376,13 @@ class _NotificationPageState extends State<NotificationPage> {
                         ),
                       ),
 
-                      //  Date/time
                       SizedBox(
                         width: 55,
                         child: Text(
                           formatThaiDate(createdAt),
                           textAlign: TextAlign.right,
                           overflow: TextOverflow.ellipsis,
-                          style:
-                              const TextStyle(color: Colors.grey, fontSize: 12),
+                          style: const TextStyle(color: Colors.grey, fontSize: 12),
                         ),
                       ),
                     ],

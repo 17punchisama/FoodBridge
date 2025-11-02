@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -15,9 +17,11 @@ class _ReportPageState extends State<ReportPage> {
   final TextEditingController titleController = TextEditingController();
   final TextEditingController detailController = TextEditingController();
   final List<String> selectedTypes = [];
-  final List<String> imageUrls = [];
+  final List<File> imageFiles = []; // <-- changed from imageUrls to File list
   bool isLoading = false;
+  final picker = ImagePicker();
 
+  /// 🧾 Submit report
   Future<void> submitReport() async {
     if (titleController.text.isEmpty || detailController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -36,11 +40,14 @@ class _ReportPageState extends State<ReportPage> {
       return;
     }
 
+    // For now, just send filenames — you could upload them separately if API supports
+    final images = imageFiles.map((file) => file.path).toList();
+
     final body = {
       "title": titleController.text.trim(),
       "types": selectedTypes,
       "detail": detailController.text.trim(),
-      "images": imageUrls,
+      "images": images,
     };
 
     setState(() => isLoading = true);
@@ -79,33 +86,41 @@ class _ReportPageState extends State<ReportPage> {
     }
   }
 
-  void _showAddImageDialog() {
-    final TextEditingController urlController = TextEditingController();
-    showDialog(
+  /// 📸 Pick image from gallery or camera
+  Future<void> _pickImage(ImageSource source) async {
+    final pickedFile = await picker.pickImage(source: source, imageQuality: 75);
+    if (pickedFile != null) {
+      setState(() {
+        imageFiles.add(File(pickedFile.path));
+      });
+    }
+  }
+
+  /// 🧱 Choose source dialog
+  void _showImageSourceDialog() {
+    showModalBottomSheet(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('เพิ่ม URL รูปภาพ'),
-        content: TextField(
-          controller: urlController,
-          decoration: const InputDecoration(
-            hintText: 'เช่น https://example.com/image.jpg',
-          ),
+      builder: (_) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('เลือกจากแกลเลอรี่'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.gallery);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('ถ่ายภาพใหม่'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.camera);
+              },
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('ยกเลิก'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (urlController.text.isNotEmpty) {
-                setState(() => imageUrls.add(urlController.text.trim()));
-              }
-              Navigator.pop(context);
-            },
-            child: const Text('เพิ่ม'),
-          ),
-        ],
       ),
     );
   }
@@ -148,7 +163,7 @@ class _ReportPageState extends State<ReportPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header Row
+              // Header
               Row(
                 children: [
                   IconButton(
@@ -161,7 +176,6 @@ class _ReportPageState extends State<ReportPage> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 10),
 
               // ID bar
@@ -209,9 +223,10 @@ class _ReportPageState extends State<ReportPage> {
               const Text('รูปภาพประกอบ',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
               const SizedBox(height: 8),
+
               ElevatedButton.icon(
-                onPressed: _showAddImageDialog,
-                icon: const Icon(Icons.add, color: Colors.orange),
+                onPressed: _showImageSourceDialog,
+                icon: const Icon(Icons.add_a_photo, color: Colors.orange),
                 label: const Text(
                   'เพิ่มรูปภาพ',
                   style: TextStyle(color: Colors.black87),
@@ -221,20 +236,46 @@ class _ReportPageState extends State<ReportPage> {
                   elevation: 1,
                   side: const BorderSide(color: Colors.grey),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15)),
+                    borderRadius: BorderRadius.circular(15),
+                  ),
                 ),
               ),
 
-              if (imageUrls.isNotEmpty) ...[
+              if (imageFiles.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 Wrap(
                   spacing: 8,
-                  children: imageUrls.map((url) {
-                    return Image.network(
-                      url,
-                      height: 80,
-                      width: 80,
-                      fit: BoxFit.cover,
+                  runSpacing: 8,
+                  children: imageFiles.map((file) {
+                    return Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.file(
+                            file,
+                            height: 80,
+                            width: 80,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        Positioned(
+                          top: 0,
+                          right: 0,
+                          child: GestureDetector(
+                            onTap: () {
+                              setState(() => imageFiles.remove(file));
+                            },
+                            child: Container(
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.black54,
+                              ),
+                              child: const Icon(Icons.close,
+                                  size: 16, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ],
                     );
                   }).toList(),
                 ),
@@ -273,8 +314,8 @@ class _ReportPageState extends State<ReportPage> {
                   onPressed: isLoading ? null : submitReport,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green[800],
-                    padding: const EdgeInsets.symmetric(
-                        vertical: 14, horizontal: 24),
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(30)),
                   ),
