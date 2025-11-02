@@ -284,7 +284,7 @@ class _ProfilePageState extends State<ProfilePage> {
         final images = item['images'] ?? [];
         final imageUrl = (images.isNotEmpty && images.first is String)
             ? images.first as String
-            : 'https://www.shutterstock.com/image-vector/avatar-gender-neutral-silhouette-vector-600nw-2470054311.jpg';
+            : 'https://genconnect.com.sg/cdn/shop/files/Display.jpg?v=1684741232&width=1445';
 
         final createdAt = item['created_at'];
         DateTime createdAtDate;
@@ -317,9 +317,12 @@ class _ProfilePageState extends State<ProfilePage> {
         print("distancekm: $distance");
 
         return {
+          // 'id': item['post_id'],
           'image': imageUrl,
           'title': item['title'] ?? 'ไม่ระบุชื่อโพสต์',
-          'location': item['address'] ?? 'ไม่ระบุสถานที่',
+          'location': (item['address'] == null || item['address'].toString().isEmpty)
+              ? 'ไม่ระบุสถานที่'
+              : item['address'],
           'kilo': kiloText,
           'owner': userData?['full_name'] ?? "Unknown",
           'created_at': createdAtDate.toIso8601String(),
