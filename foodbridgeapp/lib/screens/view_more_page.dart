@@ -7,6 +7,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:geocoding/geocoding.dart';
 import 'dart:async';
+import 'post_page.dart';
 
 class ViewMorePage extends StatefulWidget {
   final String type;
@@ -74,8 +75,10 @@ class _ViewMorePageState extends State<ViewMorePage> {
   }
 
   Future<String> _getDistanceText(double? lat, double? lng) async {
-    if (lat == null || lng == null || _currentUserPosition == null) return '- km';
-    final distance = Geolocator.distanceBetween(
+    if (lat == null || lng == null || _currentUserPosition == null)
+      return '- km';
+    final distance =
+        Geolocator.distanceBetween(
           _currentUserPosition!.latitude,
           _currentUserPosition!.longitude,
           lat,
@@ -93,11 +96,13 @@ class _ViewMorePageState extends State<ViewMorePage> {
     String postType = widget.type.toLowerCase(); // "free" / "sale" / "user"
 
     if (postType == 'user') {
-      apiUrls = ['https://foodbridge1.onrender.com/users/${widget.ownerId}/posts'];
+      apiUrls = [
+        'https://foodbridge1.onrender.com/users/${widget.ownerId}/posts',
+      ];
     } else {
       apiUrls = [
         'https://foodbridge1.onrender.com/posts?status=CLOSED',
-        'https://foodbridge1.onrender.com/posts'
+        'https://foodbridge1.onrender.com/posts',
       ];
     }
 
@@ -112,7 +117,9 @@ class _ViewMorePageState extends State<ViewMorePage> {
         );
 
         if (response.statusCode != 200) {
-          debugPrint("❌ Failed to fetch posts from $url : ${response.statusCode}");
+          debugPrint(
+            "❌ Failed to fetch posts from $url : ${response.statusCode}",
+          );
           continue; // skip this API
         }
 
@@ -120,10 +127,15 @@ class _ViewMorePageState extends State<ViewMorePage> {
         final List<dynamic> items = data['items'] ?? [];
 
         for (final item in items) {
-          final bool isGiveaway = item['is_giveaway'] == true || item['is_giveaway'] == 'true';
-          if ((postType == 'free' && !isGiveaway) || (postType == 'sale' && isGiveaway)) continue;
+          final bool isGiveaway =
+              item['is_giveaway'] == true || item['is_giveaway'] == 'true';
+          if ((postType == 'free' && !isGiveaway) ||
+              (postType == 'sale' && isGiveaway))
+            continue;
           if (postType == 'category' &&
-              (item['categories'] == null || item['categories'].isEmpty || item['categories'].first != widget.ownerId)) {
+              (item['categories'] == null ||
+                  item['categories'].isEmpty ||
+                  item['categories'].first != widget.ownerId)) {
             continue;
           }
 
@@ -141,35 +153,45 @@ class _ViewMorePageState extends State<ViewMorePage> {
 
           Map<String, dynamic> ownerData = {};
           final ownerRes = await http.get(
-            Uri.parse('https://foodbridge1.onrender.com/users/${item['provider_id']}'),
+            Uri.parse(
+              'https://foodbridge1.onrender.com/users/${item['provider_id']}',
+            ),
             headers: {'Authorization': 'Bearer $token'},
           );
           if (ownerRes.statusCode == 200) ownerData = jsonDecode(ownerRes.body);
 
           Map<String, dynamic> bookingData = {};
           final bookingRes = await http.get(
-            Uri.parse('https://foodbridge1.onrender.com/bookings?post_id=${item['post_id']}'),
+            Uri.parse(
+              'https://foodbridge1.onrender.com/bookings?post_id=${item['post_id']}',
+            ),
             headers: {'Authorization': 'Bearer $token'},
           );
-          if (bookingRes.statusCode == 200) bookingData = jsonDecode(bookingRes.body);
+          if (bookingRes.statusCode == 200)
+            bookingData = jsonDecode(bookingRes.body);
 
-          String shop = (item['categories'] == null || item['categories'].isEmpty)
+          String shop =
+              (item['categories'] == null || item['categories'].isEmpty)
               ? 'No categories'
               : (item['categories'] as List).join(', ');
 
           String queue = 'กำลังรอคิว - คน';
           String leftQueue = '';
           int quantity = int.tryParse(item['quantity']?.toString() ?? '0') ?? 0;
-          int receiverCount = int.tryParse(bookingData['receiver_count']?.toString() ?? '0') ?? 0;
+          int receiverCount =
+              int.tryParse(bookingData['receiver_count']?.toString() ?? '0') ??
+              0;
           queue = 'กำลังรอคิว $receiverCount คน';
           leftQueue = 'คงเหลือ ${quantity - receiverCount} ที่';
 
           bool isOpen = item['status'] == 'OPEN';
 
           postList.add({
+            'id': item['post_id'].toString(),
             'image': imageUrl,
             'title': item['title'] ?? '-',
-            'location': (item['address'] == null || item['address'].toString().isEmpty)
+            'location':
+                (item['address'] == null || item['address'].toString().isEmpty)
                 ? 'ไม่ระบุสถานที่'
                 : item['address'].toString(),
             'kilo': kiloText,
@@ -202,7 +224,6 @@ class _ViewMorePageState extends State<ViewMorePage> {
       setState(() => loadingPosts = false);
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -280,7 +301,10 @@ class _ViewMorePageState extends State<ViewMorePage> {
                             itemBuilder: (context, index) {
                               final item = filteredGiveaways[index];
                               return GiveawayCard(
-                                imageUrl: item['image'] ?? 'https://genconnect.com.sg/cdn/shop/files/Display.jpg?v=1684741232&width=1445',
+                                id: item['id'] ?? '1',
+                                imageUrl:
+                                    item['image'] ??
+                                    'https://genconnect.com.sg/cdn/shop/files/Display.jpg?v=1684741232&width=1445',
                                 title: item['title'] ?? '-',
                                 kilo: item['kilo'] ?? '- km',
                                 owner: item['owner'] ?? '-',
@@ -300,6 +324,7 @@ class _ViewMorePageState extends State<ViewMorePage> {
 }
 
 class GiveawayCard extends StatelessWidget {
+  final String id;
   final String imageUrl;
   final String title;
   final String kilo;
@@ -311,6 +336,7 @@ class GiveawayCard extends StatelessWidget {
 
   const GiveawayCard({
     super.key,
+    required this.id,
     required this.imageUrl,
     required this.title,
     required this.kilo,
@@ -323,175 +349,192 @@ class GiveawayCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      color: Colors.white,
-      child: Stack(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(10),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    imageUrl,
-                    width: 100,
-                    height: 110,
-                    fit: BoxFit.cover,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      return Image.network(
-                        'https://genconnect.com.sg/cdn/shop/files/Display.jpg?v=1684741232&width=1445',
-                        width: 100,
-                        height: 110,
-                        fit: BoxFit.cover,
-                      );
-                    },
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PostPage(postId: int.parse(id)),
+          ),
+        );
+      },
+      child: Card(
+        elevation: 0,
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        color: Colors.white,
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      imageUrl,
+                      width: 100,
+                      height: 110,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return const Center(
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return Image.network(
+                          'https://genconnect.com.sg/cdn/shop/files/Display.jpg?v=1684741232&width=1445',
+                          width: 100,
+                          height: 110,
+                          fit: BoxFit.cover,
+                        );
+                      },
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          SizedBox(
-                            width: 180,
-                            child: Text(
-                              title,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            SizedBox(
+                              width: 180,
+                              child: Text(
+                                title,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          SvgPicture.asset('assets/icons/bike.svg', width: 10, height: 10),
-                          const SizedBox(width: 3),
-                          Text(
-                            kilo,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: Colors.black54,
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            SvgPicture.asset(
+                              'assets/icons/bike.svg',
+                              width: 10,
+                              height: 10,
                             ),
-                          ),
-                          const SizedBox(width: 6),
-                          SvgPicture.asset('assets/icons/owner.svg', width: 10, height: 10),
-                          const SizedBox(width: 3),
-                          Text(
-                            owner,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: Colors.black54,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.red,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              category,
+                            const SizedBox(width: 3),
+                            Text(
+                              kilo,
                               style: const TextStyle(
+                                fontSize: 13,
+                                color: Colors.black54,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            SvgPicture.asset(
+                              'assets/icons/owner.svg',
+                              width: 10,
+                              height: 10,
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              owner,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Colors.black54,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                category,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
                                 color: Colors.white,
-                                fontSize: 12,
+                                border: Border.all(color: Color(0xFFF58319)),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                leftQueue,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFFF58319),
+                                ),
                               ),
                             ),
-                          ),
-                          // const SizedBox(width: 6),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              border: Border.all(color: Color(0xFFF58319)),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              leftQueue,
-                              style: const TextStyle(
-                                fontSize: 12,
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
                                 color: Color(0xFFF58319),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                queue,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Color(0xFFF58319),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              queue,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        
+                          ],
+                        ),
                       ],
-                      ),
-                    ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              right: 10,
+              top: 10,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isOpen ? Color.fromARGB(255, 3, 130, 99) : Colors.red,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  isOpen ? 'เปิดจอง' : 'ปิดจอง',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-              ],
-            ),
-          ),
-          Positioned(
-            right: 10,
-            top: 10,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: isOpen ? Color.fromARGB(255, 3, 130, 99): Colors.red,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                isOpen ? 'เปิดจอง' : 'ปิดจอง',
-                style: TextStyle(
-                  color: isOpen ? Colors.white : Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-      
     );
   }
 }
