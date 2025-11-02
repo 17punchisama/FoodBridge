@@ -4,7 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:foodbridgeapp/screens/home_page.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-
+import 'notification_page.dart';
 import 'report_page.dart';
 import 'register_page.dart';
 
@@ -273,11 +273,12 @@ class _LoginPageState extends State<LoginPage> {
                   const Text('คุณลืมรหัสผ่านใช่หรือไม่? '),
                   TextButton(
                     onPressed: () {
-                      // TODO: เส้นทางลืมรหัสผ่าน (เพิ่มหน้าเมื่อพร้อม)
+                      // TODO: ลืมรหัสผ่าน
                       Navigator.push(
                           context,
                           MaterialPageRoute(
-                              builder: (context) => const ReportPage(postId: 6,)),
+                              // builder: (context) => const ReportPage(postId: 6,)),
+                              builder: (context) => const NotificationPage()) ,
                         );
                     },
                     child: const Text(

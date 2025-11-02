@@ -22,7 +22,7 @@ class _NotificationPageState extends State<NotificationPage> {
     loadNotifications();
   }
 
-  /// 🔐 Fetch notifications
+  ///  Fetch notifications
   Future<List<Map<String, dynamic>>> fetchNotifications(String token) async {
     final url = Uri.parse('https://foodbridge1.onrender.com/notifications');
     final res = await http.get(url, headers: {
@@ -39,7 +39,7 @@ class _NotificationPageState extends State<NotificationPage> {
     return [];
   }
 
-  /// 🧩 Fetch post data — for title clarity
+  ///  Fetch post data — for title clarity
   Future<String?> fetchPostTitle(int postId, String token) async {
     // Use cache to avoid duplicate network calls
     if (postTitleCache.containsKey(postId)) {
@@ -74,7 +74,7 @@ class _NotificationPageState extends State<NotificationPage> {
     });
   }
 
-  /// 🏷️ Normalize type name for display
+  ///  Normalize type name for display
   String normalizeType(String type) {
     if (type.isEmpty) return 'UNKNOWN';
     if (type.contains('.')) {
@@ -85,21 +85,21 @@ class _NotificationPageState extends State<NotificationPage> {
     return type.toUpperCase();
   }
 
-  /// 🖼️ Select icon
+  ///  Select icon
   String iconPathForType(String type) {
     switch (type.toUpperCase()) {
       case 'PENDING':
         return 'assets/icons/new_pending.svg';
       case 'CANCELLED':
         return 'assets/icons/new_cancelled.svg';
-      case 'ACCEPTED':
+      case 'CONFIRMED':
         return 'assets/icons/new_excepted.svg';
       default:
         return 'assets/icons/new_expired.svg';
     }
   }
 
-  /// 🕒 Format Thai date
+  ///  Format Thai date
   String formatThaiDate(DateTime date) {
     final now = DateTime.now();
     final diff = now.difference(date);
@@ -127,6 +127,8 @@ class _NotificationPageState extends State<NotificationPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
+
         title: const Text(
           'การแจ้งเตือน',
           style: TextStyle(
@@ -136,6 +138,15 @@ class _NotificationPageState extends State<NotificationPage> {
         ),
         backgroundColor: Colors.white,
         elevation: 0,
+
+        actions: [
+          IconButton(
+          icon: const Icon(Icons.delete),
+          onPressed: () {
+            // TODO: add delete action here
+          },
+        ),
+        ],
       ),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _future,
@@ -170,7 +181,6 @@ class _NotificationPageState extends State<NotificationPage> {
 
               return InkWell(
                 onTap: () {
-                  // You could navigate to detail here
                 },
                 child: Padding(
                   padding:
@@ -199,7 +209,7 @@ class _NotificationPageState extends State<NotificationPage> {
                       ),
                       const SizedBox(width: 12),
 
-                      /// 🧾 Notification Text Block
+                      ///  Notification Text Block
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -208,9 +218,7 @@ class _NotificationPageState extends State<NotificationPage> {
                               '[${type.toUpperCase()}] $title',
                               style: TextStyle(
                                 color: Colors.red[700],
-                                fontWeight: isRead
-                                    ? FontWeight.normal
-                                    : FontWeight.bold,
+                                fontWeight: FontWeight.bold,
                                 fontSize: 15,
                               ),
                             ),
@@ -220,7 +228,7 @@ class _NotificationPageState extends State<NotificationPage> {
                               style: const TextStyle(color: Colors.black87),
                             ),
 
-                            /// 🎯 Fetch and display post title below
+                            ///  Fetch and display post title below
                             if (postId != null)
                               FutureBuilder<String?>(
                                 future: storage.read(key: 'token').then(
@@ -237,14 +245,14 @@ class _NotificationPageState extends State<NotificationPage> {
                                           fontSize: 12, color: Colors.grey),
                                     );
                                   }
-                                  if (snapshot.hasData &&
-                                      snapshot.data != null) {
-                                    return Text(
-                                      'โพสต์: ${snapshot.data}',
-                                      style: const TextStyle(
-                                          fontSize: 12, color: Colors.black54),
-                                    );
-                                  }
+                                  // if (snapshot.hasData &&
+                                  //     snapshot.data != null) {
+                                  //   return Text(
+                                  //     'โพสต์: ${snapshot.data}',
+                                  //     style: const TextStyle(
+                                  //         fontSize: 12, color: Colors.black54),
+                                  //   );
+                                  // }
                                   return const SizedBox.shrink();
                                 },
                               ),
@@ -252,7 +260,7 @@ class _NotificationPageState extends State<NotificationPage> {
                         ),
                       ),
 
-                      // 🕒 Date/time
+                      //  Date/time
                       SizedBox(
                         width: 55,
                         child: Text(
