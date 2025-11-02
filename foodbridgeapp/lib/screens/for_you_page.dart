@@ -1,21 +1,17 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:foodbridgeapp/screens/post_page.dart';
-import 'package:foodbridgeapp/screens/create_post.dart';
-// import 'other_profile_page.dart';
-import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
-import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:foodbridgeapp/verified_service.dart';
 import 'package:geocoding/geocoding.dart';
-import 'dart:async';
 
+import 'post_page.dart';
+import 'create_post.dart';
 import 'view_more_page.dart';
+import 'search_result_page.dart';
+
 class ForYouPage extends StatefulWidget {
   const ForYouPage({super.key});
 
@@ -24,16 +20,17 @@ class ForYouPage extends StatefulWidget {
 }
 
 class _ForYouPageState extends State<ForYouPage> {
-  List<Map<String, String>> allFreePosts = [];
-  bool loadingFreePosts = true;
-  List<Map<String, String>> allSalePosts = [];
-  bool loadingSalePosts = true;
-  final _storage = const FlutterSecureStorage();
-  String? currentProvince;
-  LatLng? _currentUserPosition;
-  // Map<String, dynamic>? userData;
+  // เก็บโพสต์
+  List<Map<String, dynamic>> allFreePosts = [];
+  List<Map<String, dynamic>> allSalePosts = [];
 
-  final categories_4 = [
+  bool loading = true;
+
+  final _storage = const FlutterSecureStorage();
+  LatLng? _currentUserPosition;
+  final TextEditingController _searchCtrl = TextEditingController();
+
+  final categories_4 = const [
     {'icon': 'assets/images/meal.png', 'label': 'ของคาว'},
     {'icon': 'assets/images/dessert.png', 'label': 'ของหวาน'},
     {'icon': 'assets/images/meat.png', 'label': 'เนื้อสด'},
@@ -43,207 +40,159 @@ class _ForYouPageState extends State<ForYouPage> {
   @override
   void initState() {
     super.initState();
-    _initializeData();
+    _init();
   }
 
-  Future<void> _initializeData() async {
-    await _loadUserProvinceAndPosition();
-    await fetchAllFreePosts();
+  Future<void> _init() async {
+    await _loadUserLocation();
+    await _fetchPostsLight();
   }
 
-  Future<void> _loadUserProvinceAndPosition() async {
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return;
-
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) return;
+  Future<void> _loadUserLocation() async {
+    if (!await Geolocator.isLocationServiceEnabled()) return;
+    var perm = await Geolocator.checkPermission();
+    if (perm == LocationPermission.denied) {
+      perm = await Geolocator.requestPermission();
+      if (perm == LocationPermission.denied) return;
     }
-
     try {
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-      final placemarks = await placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
-      );
-      if (!mounted) return;
-      setState(() {
-        currentProvince = placemarks.isNotEmpty
-            ? placemarks.first.administrativeArea ?? "No Where"
-            : "No Where";
-        _currentUserPosition = LatLng(position.latitude, position.longitude);
-      });
-    } catch (e) {
-      debugPrint("Error reverse geocoding: $e");
-      if (!mounted) return;
-      setState(() {
-        currentProvince = "No Where";
-        _currentUserPosition = LatLng(13.7563, 100.5018);
-      });
+      final pos = await Geolocator.getCurrentPosition();
+      _currentUserPosition = LatLng(pos.latitude, pos.longitude);
+    } catch (_) {
+      _currentUserPosition = const LatLng(13.7563, 100.5018);
     }
   }
 
-  Future<double?> calculateDistance(double postLat, double postLng) async {
-    if (_currentUserPosition == null) return null;
+  // เช็กฟรี/ไม่ฟรี
+  bool _isGiveaway(dynamic item) {
+    final v = item['is_giveaway'] ?? item['isgiveaway'];
+    if (v == null) return false;
+    if (v is bool) return v;
+    if (v is String) return v.toLowerCase() == 'true';
+    if (v is num) return v != 0;
+    return false;
+  }
 
-    final distanceInMeters = Geolocator.distanceBetween(
+  Future<String> _distanceText(dynamic latRaw, dynamic lngRaw) async {
+    final lat = (latRaw as num?)?.toDouble();
+    final lng = (lngRaw as num?)?.toDouble();
+    if (lat == null || lng == null || _currentUserPosition == null) {
+      return '- km';
+    }
+    final m = Geolocator.distanceBetween(
       _currentUserPosition!.latitude,
       _currentUserPosition!.longitude,
-      postLat,
-      postLng,
+      lat,
+      lng,
     );
-
-    return distanceInMeters / 1000; // km
+    final km = m / 1000.0;
+    return km > 999 ? '999+ km' : '${km.toStringAsFixed(2)} km';
   }
 
-  Future<void> fetchAllFreePosts() async {
+  // เวอร์ชันเบา: ดึงแค่ /posts ทีเดียว แล้วแยกในแอป
+  Future<void> _fetchPostsLight() async {
     final token = await _storage.read(key: 'token');
-    if (token == null) return;
-
-    final urls = [
-      'https://foodbridge1.onrender.com/posts?status=CLOSED',
-      'https://foodbridge1.onrender.com/posts',
-    ];
+    if (token == null) {
+      setState(() => loading = false);
+      return;
+    }
 
     try {
-      List<Map<String, String>> itemFree = [];
-      List<Map<String, String>> itemSale = [];
-      // List<Map<String, String>> mergedPosts = [];
+      final res = await http.get(
+        Uri.parse('https://foodbridge1.onrender.com/posts'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
 
-      for (String url in urls) {
-        final response = await http.get(
-          Uri.parse(url),
-          headers: {'Authorization': 'Bearer $token'},
-        );
-
-        if (response.statusCode != 200) continue;
-
-        final data = json.decode(response.body);
-        final List<dynamic> items = data['items'] ?? [];
-
-        final futures = items.map<Future<Map<String, String>>>((item) async {
-          final images = item['images'] ?? [];
-          final imageUrl = (images.isNotEmpty && images.first is String)
-              ? images.first as String
-              : 'https://genconnect.com.sg/cdn/shop/files/Display.jpg?v=1684741232&width=1445';
-
-          final createdAt = item['created_at'];
-          DateTime createdAtDate;
-          if (createdAt is int) {
-            createdAtDate = DateTime.fromMillisecondsSinceEpoch(
-              createdAt * 1000,
-            );
-          } else if (createdAt is String) {
-            createdAtDate = DateTime.tryParse(createdAt) ?? DateTime(0);
-          } else {
-            createdAtDate = DateTime(0);
-          }
-
-          double? lat = item['lat'];
-          double? lng = item['lng'];
-          String kiloText;
-
-          if (lat == null || lng == null) {
-            kiloText = '- km';
-          } else {
-            final distance = await calculateDistance(
-              lat.toDouble(),
-              lng.toDouble(),
-            );
-
-            if (distance == null) {
-              kiloText = 'Null';
-            } else {
-              final clampedDistance = distance > 999 ? 999 : distance;
-              kiloText = distance > 999
-                  ? '999+ km'
-                  : "${clampedDistance.toStringAsFixed(2)} km";
-            }
-          }
-
-          Map<String, dynamic> ownerData = {};
-          final responseUser = await http.get(
-            Uri.parse(
-              'https://foodbridge1.onrender.com/users/${item['provider_id']}',
-            ),
-            headers: {'Authorization': 'Bearer $token'},
-          );
-
-          if (responseUser.statusCode == 200) {
-            ownerData = jsonDecode(responseUser.body);
-          } else {
-            debugPrint('Failed to load user: ${responseUser.statusCode}');
-          }
-
-          String shop;
-          if (item['categories'] == null || item['categories'] == []) {
-            shop = 'No categories';
-          } else {
-            shop = item['categories']?.join(', ');
-          }
-
-          final postMap = {
-            'id': item['post_id'].toString(),
-            'image': imageUrl.toString(),
-            'title': item['title'].toString(),
-            'location':
-                (item['address'] == null || item['address'].toString().isEmpty)
-                ? 'ไม่ระบุสถานที่'
-                : item['address'].toString(),
-            'kilo': kiloText,
-            'owner': ownerData['full_name'].toString(),
-            'created_at': createdAtDate.toIso8601String(),
-            'shop': shop,
-            'price': "฿${item['price']}",
-          };
-
-          // Separate into free vs sale
-          if ((item['price'] ?? 0) == 0 || item['price'] == null) {
-            itemFree.add(postMap);
-          } else {
-            itemSale.add(postMap);
-          }
-
-          return postMap;
-        }).toList();
-
-        await Future.wait(futures);
+      if (res.statusCode != 200) {
+        setState(() => loading = false);
+        return;
       }
 
-      // Sort both lists newest first
-      itemFree.sort((a, b) {
-        final dateA = DateTime.tryParse(a['created_at'] ?? '') ?? DateTime(0);
-        final dateB = DateTime.tryParse(b['created_at'] ?? '') ?? DateTime(0);
-        return dateB.compareTo(dateA);
-      });
+      final data = jsonDecode(res.body);
+      final List items = data['items'] ?? [];
 
-      itemSale.sort((a, b) {
-        final dateA = DateTime.tryParse(a['created_at'] ?? '') ?? DateTime(0);
-        final dateB = DateTime.tryParse(b['created_at'] ?? '') ?? DateTime(0);
-        return dateB.compareTo(dateA);
+      final List<Map<String, dynamic>> tmpFree = [];
+      final List<Map<String, dynamic>> tmpSale = [];
+
+      // ดึงระยะทางแบบ async ทั้งก้อน
+      final futures = items.map<Future<void>>((item) async {
+        final images = item['images'] ?? [];
+        final imageUrl = (images.isNotEmpty && images.first is String)
+            ? images.first as String
+            : 'https://genconnect.com.sg/cdn/shop/files/Display.jpg?v=1684741232&width=1445';
+
+        final createdAt = DateTime.tryParse(item['created_at'].toString()) ??
+            DateTime(0);
+
+        final kiloText = await _distanceText(item['lat'], item['lng']);
+
+        String cat;
+        if (item['categories'] == null || item['categories'].isEmpty) {
+          cat = 'No categories';
+        } else {
+          cat = (item['categories'] as List).join(', ');
+        }
+
+        final map = <String, dynamic>{
+          'id': item['post_id'].toString(),
+          'image': imageUrl,
+          'title': item['title']?.toString() ?? '-',
+          'location': (item['address'] == null ||
+                  item['address'].toString().isEmpty)
+              ? 'ไม่ระบุสถานที่'
+              : item['address'].toString(),
+          'kilo': kiloText,
+          // ไม่ดึง user เพื่อให้เร็ว
+          'owner': '-',
+          'created_at': createdAt.toIso8601String(),
+          'shop': cat,
+          'price': item['price'] == null
+              ? '฿-'
+              : '฿${item['price'].toString()}',
+        };
+
+        if (_isGiveaway(item)) {
+          tmpFree.add(map);
+        } else {
+          tmpSale.add(map);
+        }
+      }).toList();
+
+      await Future.wait(futures);
+
+      // sort ให้เหมือนเดิม
+      tmpFree.sort((a, b) {
+        final da = DateTime.tryParse(a['created_at'] ?? '') ?? DateTime(0);
+        final db = DateTime.tryParse(b['created_at'] ?? '') ?? DateTime(0);
+        return db.compareTo(da);
+      });
+      tmpSale.sort((a, b) {
+        final da = DateTime.tryParse(a['created_at'] ?? '') ?? DateTime(0);
+        final db = DateTime.tryParse(b['created_at'] ?? '') ?? DateTime(0);
+        return db.compareTo(da);
       });
 
       if (!mounted) return;
       setState(() {
-        allFreePosts = itemFree;
-        allSalePosts = itemSale;
-        loadingFreePosts = false;
+        allFreePosts = tmpFree;
+        allSalePosts = tmpSale;
+        loading = false;
       });
     } catch (e) {
-      debugPrint("Error fetching posts: $e");
-
+      debugPrint('fetch error: $e');
       if (!mounted) return;
-      setState(() {
-        loadingFreePosts = false;
-        loadingSalePosts = false;
-      });
+      setState(() => loading = false);
     }
+  }
+
+  void _goToSearch(String text) {
+    if (text.trim().isEmpty) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SearchResultPage(keyword: text.trim()),
+      ),
+    );
   }
 
   @override
@@ -254,8 +203,9 @@ class _ForYouPageState extends State<ForYouPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 🔎 Search Box
+            // search box
             Container(
+              margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(10),
@@ -264,6 +214,8 @@ class _ForYouPageState extends State<ForYouPage> {
                 ],
               ),
               child: TextField(
+                controller: _searchCtrl,
+                onSubmitted: _goToSearch,
                 decoration: InputDecoration(
                   hintText: 'ค้นหาสิ่งที่คุณต้องการ',
                   prefixIcon: Padding(
@@ -274,9 +226,10 @@ class _ForYouPageState extends State<ForYouPage> {
                       height: 24,
                     ),
                   ),
-                  filled: true,
-                  fillColor: Colors.transparent,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.search),
+                    onPressed: () => _goToSearch(_searchCtrl.text),
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide.none,
@@ -284,30 +237,30 @@ class _ForYouPageState extends State<ForYouPage> {
                 ),
               ),
             ),
-            const SizedBox(height: 24),
 
-            // Example Section
-            if (loadingFreePosts)
+            if (loading)
               const Center(child: CircularProgressIndicator())
             else
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // free
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
                         'รายการแจกฟรีใกล้ฉัน',
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.w600),
                       ),
                       GestureDetector(
                         onTap: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => ViewMorePage(
-                                type: 'free',      
-                                ownerId: '2', 
+                              builder: (_) => const ViewMorePage(
+                                type: 'free',
+                                ownerId: '2',
                               ),
                             ),
                           );
@@ -329,355 +282,265 @@ class _ForYouPageState extends State<ForYouPage> {
                     ],
                   ),
                   PostPreviewSmall(items: allFreePosts),
-                ],
-              ),
 
-            const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-            // Flash Sale Section
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Flash Sale ลดเดือดชั่วโมงนี้ ⚡',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ViewMorePage(
-                          type: 'sale',      
-                          ownerId: '2', 
-                        ),
+                  // sale
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Flash Sale ลดเดือดชั่วโมงนี้ ⚡',
+                        style: TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.w600),
                       ),
-                    );
-                  },
-                  child: Container(
-                    width: 25,
-                    height: 25,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFF58319),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.arrow_forward_ios,
-                      color: Colors.white,
-                      size: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            SizedBox(
-              height: 240,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: allSalePosts.length,
-                itemBuilder: (context, index) {
-                  final flashItem = allSalePosts[index];
-                  return InkWell(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              PostPage(postId: int.parse(flashItem['id']!)),
-                        ),
-                      );
-                    },
-                    child: Container(
-                      width: 160,
-                      margin: const EdgeInsets.only(right: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: const [
-                          BoxShadow(color: Colors.black12, blurRadius: 8),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          ClipRRect(
-                            borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(10),
-                              topRight: Radius.circular(10),
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ViewMorePage(
+                                type: 'sale',
+                                ownerId: '2',
+                              ),
                             ),
-                            child: Image.network(
-                              flashItem['image']!,
-                              width: 160,
-                              height: 140,
-                              fit: BoxFit.cover,
-                              loadingBuilder:
-                                  (context, child, loadingProgress) {
-                                    if (loadingProgress == null) return child;
-                                    return const Center(
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    );
-                                  },
-                              errorBuilder: (context, error, stackTrace) {
-                                return Image.network(
-                                  'https://genconnect.com.sg/cdn/shop/files/Display.jpg?v=1684741232&width=1445',
-                                  width: 160,
-                                  height: 140,
-                                  fit: BoxFit.cover,
-                                );
-                              },
-                            ),
+                          );
+                        },
+                        child: Container(
+                          width: 25,
+                          height: 25,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFF58319),
+                            shape: BoxShape.circle,
                           ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
+                          child: const Icon(
+                            Icons.arrow_forward_ios,
+                            color: Colors.white,
+                            size: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  SizedBox(
+                    height: 240,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: allSalePosts.length,
+                      itemBuilder: (context, index) {
+                        final item = allSalePosts[index];
+                        return InkWell(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => PostPage(
+                                  postId: int.parse(item['id'].toString()),
+                                ),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            width: 160,
+                            margin: const EdgeInsets.only(right: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: const [
+                                BoxShadow(
+                                    color: Colors.black12, blurRadius: 8),
+                              ],
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                SizedBox(
-                                  width:
-                                      140, // or whatever width fits your layout
-                                  child: Text(
-                                    flashItem['title']!,
-                                    overflow: TextOverflow.ellipsis,
-                                    maxLines: 1,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                                ClipRRect(
+                                  borderRadius: const BorderRadius.only(
+                                    topLeft: Radius.circular(10),
+                                    topRight: Radius.circular(10),
+                                  ),
+                                  child: Image.network(
+                                    item['image']?.toString() ?? '',
+                                    width: 160,
+                                    height: 140,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) {
+                                      return Image.network(
+                                        'https://genconnect.com.sg/cdn/shop/files/Display.jpg?v=1684741232&width=1445',
+                                        width: 160,
+                                        height: 140,
+                                        fit: BoxFit.cover,
+                                      );
+                                    },
                                   ),
                                 ),
-                                Text(
-                                  flashItem['shop']!,
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    color: Color(0xff828282),
-                                  ),
-                                ),
-                                Row(
-                                  children: [
-                                    SvgPicture.asset(
-                                      'assets/icons/location.svg',
-                                      width: 12,
-                                      height: 12,
-                                    ),
-                                    const SizedBox(width: 3),
-                                    SizedBox(
-                                      width:
-                                          130, // or whatever width fits your layout
-                                      child: Text(
-                                        flashItem['location']!,
-                                        overflow: TextOverflow.ellipsis,
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        item['title']?.toString() ?? '-',
                                         maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(
-                                          fontSize: 10,
-                                          color: Color(0xff828282),
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 14),
+                                      ),
+                                      Text(
+                                        item['shop']?.toString() ?? '',
+                                        style: const TextStyle(
+                                            fontSize: 10,
+                                            color: Color(0xff828282)),
+                                      ),
+                                      Row(
+                                        children: [
+                                          SvgPicture.asset(
+                                            'assets/icons/location.svg',
+                                            width: 12,
+                                            height: 12,
+                                          ),
+                                          const SizedBox(width: 3),
+                                          Expanded(
+                                            child: Text(
+                                              item['location']?.toString() ??
+                                                  '',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                  fontSize: 10,
+                                                  color: Color(0xff828282)),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      Row(
+                                        children: [
+                                          SvgPicture.asset(
+                                            'assets/icons/bike.svg',
+                                            width: 10,
+                                            height: 10,
+                                          ),
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            item['kilo']?.toString() ?? '- km',
+                                            style: const TextStyle(
+                                                fontSize: 10,
+                                                color: Color(0xff828282)),
+                                          ),
+                                        ],
+                                      ),
+                                      Text(
+                                        item['price']?.toString() ?? '฿-',
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          color: Color(0xffED1429),
+                                          fontWeight: FontWeight.w700,
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                                Row(
-                                  children: [
-                                    SvgPicture.asset(
-                                      'assets/icons/bike.svg',
-                                      width: 10,
-                                      height: 10,
-                                    ),
-                                    const SizedBox(width: 3),
-                                    Text(
-                                      flashItem['kilo']!,
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        color: Color(0xff828282),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                Text(
-                                  flashItem['price']!,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    color: Color(0xffED1429),
-                                    fontWeight: FontWeight.w700,
+                                    ],
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              "หมวดหมู่แนะนำ",
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: categories_4.map((cat) {
-                return GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ViewMorePage(
-                                type: 'category',      
-                                ownerId: cat['label']!, 
-                              ),
-                      ),
-                    );
-                  },
-                  child: Column(
-                    children: [
-                      Image.asset(cat['icon']!, width: 50, height: 50),
-                      const SizedBox(height: 4),
-                      Text(
-                        cat['label']!,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          color: Color.fromARGB(255, 245, 131, 25),
-                        ),
-                      ),
-                    ],
                   ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 20),
+
+                  const SizedBox(height: 20),
+                  const Text(
+                    "หมวดหมู่แนะนำ",
+                    style:
+                        TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: categories_4.map((cat) {
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ViewMorePage(
+                                type: 'category',
+                                ownerId: cat['label']!,
+                              ),
+                            ),
+                          );
+                        },
+                        child: Column(
+                          children: [
+                            Image.asset(cat['icon']!, width: 50, height: 50),
+                            const SizedBox(height: 4),
+                            Text(
+                              cat['label']!,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFFF58319),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 30),
+                ],
+              ),
           ],
         ),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => CreatePostPage()),
+            MaterialPageRoute(builder: (_) => const CreatePostPage()),
           );
         },
         backgroundColor: const Color(0xFFF58319),
-        child: const Icon(Icons.add, size: 30, color: Colors.white),
+        child: const Icon(Icons.add, color: Colors.white),
       ),
-    );
-  }
-
-  // helper method
-  Widget buildCategory(String imagePath, String title) {
-    return Column(
-      children: [
-        Container(
-          height: 55,
-          width: 55,
-          decoration: BoxDecoration(
-            image: DecorationImage(image: AssetImage(imagePath)),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          title,
-          style: const TextStyle(fontSize: 12, color: Color(0xFFF58319)),
-        ),
-      ],
-    );
-  }
-}
-
-class _HeaderRow extends StatelessWidget {
-  final String name;
-
-  const _HeaderRow({required this.name, super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          name,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-        ),
-        Container(
-          width: 25,
-          height: 25,
-          decoration: const BoxDecoration(
-            color: Color(0xFFF58319),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(
-            Icons.arrow_forward_ios,
-            color: Color.fromARGB(255, 244, 243, 243),
-            size: 12,
-          ),
-        ),
-      ],
     );
   }
 }
 
 class PostPreviewSmall extends StatelessWidget {
-  final List<Map<String, String>> items;
-
+  final List<Map<String, dynamic>> items;
   const PostPreviewSmall({super.key, required this.items});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
       margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        // color: Color.fromARGB(255, 226, 226, 226),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // const SizedBox(height: 12),
-          items.isEmpty
-              ? const Center(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 30),
-                    child: Text(
-                      "ยังไม่มีโพสต์",
-                      style: TextStyle(
-                        color: Colors.grey,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                )
-              : SizedBox(
-                  height: 150,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: items.length,
-                    itemBuilder: (context, index) {
-                      return _ItemCard(item: items[index]);
-                    },
-                  ),
-                ),
-        ],
-      ),
+      child: items.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.symmetric(vertical: 30),
+              child: Center(child: Text('ยังไม่มีโพสต์')),
+            )
+          : SizedBox(
+              height: 150,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  return _ItemCard(item: items[index]);
+                },
+              ),
+            ),
     );
   }
 }
 
 class _ItemCard extends StatelessWidget {
-  final Map<String, String> item;
-
+  final Map<String, dynamic> item;
   const _ItemCard({required this.item});
 
   @override
@@ -687,9 +550,8 @@ class _ItemCard extends StatelessWidget {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => PostPage(postId: int.parse(item['id']!)),
+            builder: (_) => PostPage(postId: int.parse(item['id'].toString())),
           ),
-          // MaterialPageRoute(builder: (_) => const PostPage()),
         );
       },
       child: Container(
@@ -699,111 +561,84 @@ class _ItemCard extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(10),
           boxShadow: const [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 20,
-              spreadRadius: 0,
-              offset: Offset(0, 1),
-            ),
+            BoxShadow(color: Colors.black12, blurRadius: 20, offset: Offset(0, 1)),
           ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [_buildImage(), const SizedBox(height: 8), _buildDetails()],
+          children: [
+            ClipRRect(
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(10),
+                topRight: Radius.circular(10),
+              ),
+              child: Image.network(
+                item['image']?.toString() ?? '',
+                width: 160,
+                height: 80,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) {
+                  return Image.network(
+                    'https://genconnect.com.sg/cdn/shop/files/Display.jpg?v=1684741232&width=1445',
+                    width: 160,
+                    height: 80,
+                    fit: BoxFit.cover,
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item['title']?.toString() ?? '-',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  Row(
+                    children: [
+                      SvgPicture.asset(
+                        'assets/icons/location.svg',
+                        width: 12,
+                        height: 12,
+                      ),
+                      const SizedBox(width: 2),
+                      Expanded(
+                        child: Text(
+                          item['location']?.toString() ?? '',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 10),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      SvgPicture.asset(
+                        'assets/icons/bike.svg',
+                        width: 10,
+                        height: 10,
+                      ),
+                      const SizedBox(width: 3),
+                      Text(
+                        item['kilo']?.toString() ?? '- km',
+                        style: const TextStyle(
+                            fontSize: 10, color: Color(0xff828282)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
-
-  Widget _buildImage() => ClipRRect(
-    borderRadius: const BorderRadius.only(
-      topLeft: Radius.circular(10),
-      topRight: Radius.circular(10),
-    ),
-    child: Image.network(
-      item['image']!,
-      width: 160,
-      height: 80,
-      fit: BoxFit.cover,
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) return child;
-        return const Center(child: CircularProgressIndicator(strokeWidth: 2));
-      },
-      errorBuilder: (context, error, stackTrace) {
-        return Image.network(
-          'https://genconnect.com.sg/cdn/shop/files/Display.jpg?v=1684741232&width=1445',
-          width: 160,
-          height: 80,
-          fit: BoxFit.cover,
-        );
-      },
-    ),
-  );
-
-  Widget _buildDetails() => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 8),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 140, // or whatever width fits your layout
-          child: Text(
-            item['title']!,
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-          ),
-        ),
-        const SizedBox(height: 2),
-        Row(
-          children: [
-            SvgPicture.asset(
-              'assets/icons/location.svg',
-              width: 12,
-              height: 12,
-            ),
-            const SizedBox(width: 2),
-            SizedBox(
-              width: 130, // or whatever width fits your layout
-              child: Text(
-                item['location']!,
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-                style: const TextStyle(fontSize: 10, color: Colors.black),
-              ),
-            ),
-          ],
-        ),
-        Row(
-          children: [
-            SvgPicture.asset('assets/icons/bike.svg', width: 10, height: 10),
-            const SizedBox(width: 3),
-            Text(
-              item['kilo']!,
-              // double.tryParse(item['kilo']?.replaceAll(' km', '') ?? '0') !=
-              //         null
-              //     ? "${double.parse(item['kilo']!.replaceAll(' km', '')).clamp(0, 999).toStringAsFixed(0)} km"
-              //     : item['kilo']!,
-              style: const TextStyle(fontSize: 10, color: Color(0xff828282)),
-            ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 4),
-              child: Text(
-                '|',
-                style: TextStyle(fontSize: 10, color: Color(0xff828282)),
-              ),
-            ),
-            SvgPicture.asset('assets/icons/owner.svg', width: 10, height: 10),
-            const SizedBox(width: 3),
-            Text(
-              item['owner']!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 10, color: Color(0xff828282)),
-            ),
-          ],
-        ),
-      ],
-    ),
-  );
 }
