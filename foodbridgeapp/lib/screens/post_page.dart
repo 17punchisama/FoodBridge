@@ -152,7 +152,7 @@ class _PostPageState extends State<PostPage> {
 
     try {
       final response = await http.get(
-        Uri.parse('https://foodbridge1.onrender.com/bookings?post_id=${widget.postId}'),
+        Uri.parse('https://foodbridge1.onrender.com/bookings?post_id=${widget.postId}&status=PENDING,QUEUED,COMPLETED'),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",
@@ -789,14 +789,18 @@ class _PostPageState extends State<PostPage> {
                           ),
                           childrenPadding: const EdgeInsets.only(top: 12),
                           children: [
-                            Text(
-                              description ?? '', // backend
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: Colors.black87,
-                                height: 1.4,
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                description ?? '',
+                                textAlign: TextAlign.left,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  color: Colors.black87,
+                                  height: 1.4,
+                                ),
                               ),
-                            ),
+                            )
                           ],
                         ),
                       ),
@@ -1097,6 +1101,7 @@ class _PostPageState extends State<PostPage> {
         final data = jsonDecode(response.body);
         setState(() {
           reservationId = data['token'] ?? 'unknown_token';
+          currentQrToken = reservationId;
         });
         print("QR Token received: $reservationId");
       } else {
