@@ -9,6 +9,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:foodbridgeapp/verified_service.dart';
+import 'package:foodbridgeapp/screens/vertify_id_page.dart';
 
 
 // Enum to track user verification and reservation status
@@ -54,7 +55,12 @@ class _PostPageState extends State<PostPage> {
   final String imagePath = 'assets/images/savory_img.png';
   String? status;
   String? freeLabel;
-  int? availableCount;
+
+  int remainingCount = 0;
+  int receiverCount = 0;
+  int totalQuantity = 0 ; // backend total quantity
+
+  String? imageUrl;
   String? menuName;
   String? address;
   String? openTime;
@@ -74,6 +80,7 @@ class _PostPageState extends State<PostPage> {
   int? userQuotaLeft;
 
   int? currentBookingId;
+  String? currentQrToken;
   int? postCloseTimeUnix;
 
   Future<void> _fetchPostData() async {
@@ -94,9 +101,14 @@ class _PostPageState extends State<PostPage> {
         setState(() {
           status = data['status'] ?? 'เปิดจอง';
           freeLabel = data['is_giveaway'] == true ? 'ฟรี' : '';
-          availableCount = data['quantity'] ?? 0;
+          totalQuantity = data['quantity'] ?? 0;
           menuName = data['title'] ?? '-';
           address = data['address'] ?? '-';
+          if (data['images'] != null && data['images'].isNotEmpty) {
+            imageUrl = data['images'][0];
+          } else {
+            imageUrl = null;
+  }
           description = data['description'] ?? '-';
           openTime = _formatTimeRange(data['open_time'], data['close_time']);
           openDateFormatted = _formatDate(data['open_time']);
@@ -110,7 +122,12 @@ class _PostPageState extends State<PostPage> {
           district = data['district'] ?? 'ไม่ทราบ';
           province = data['province'] ?? 'ไม่ทราบ';
         });
-        
+
+        await _fetchReceiverCount();
+        await _checkExistingBooking();
+        final closeTime = DateTime.fromMillisecondsSinceEpoch(postCloseTimeUnix! * 1000);
+        _startCountdown(closeTime);
+
         // Move map to post location
         if (postLat != null && postLng != null && _mapController != null) {
           _mapController!.animateCamera(
@@ -142,7 +159,8 @@ class _PostPageState extends State<PostPage> {
 
     try {
       final response = await http.get(
-        Uri.parse('https://foodbridge1.onrender.com/bookings?post_id=${widget.postId}'),
+        //get only bookings with specific statuses
+        Uri.parse('https://foodbridge1.onrender.com/bookings?post_id=${widget.postId}&status=PENDING,QUEUED,COMPLETED'),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",
@@ -152,12 +170,15 @@ class _PostPageState extends State<PostPage> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final count = data['receiver_count'] ?? 0;
-
-        setState(() {
-          availableCount = count;
+        print('totalQuantity: $totalQuantity');
+        setState(() { 
+          receiverCount = count;
+          remainingCount = (totalQuantity - receiverCount).clamp(0, totalQuantity);
+     
         });
 
         print('Updated receiver count: $count');
+        print('remaining Food: $remainingCount');
       } else {
         print('Failed to fetch receiver count: ${response.statusCode}');
       }
@@ -166,17 +187,111 @@ class _PostPageState extends State<PostPage> {
     }
   }
 
-  Future<void> _fetchUserVerificationStatus() async {
-  final user = await VerifiedService.getCurrentUser();
-  if (user == null) return;
+  Future<void> _fetchQrToken(int bookingId, int? closeTimeUnix) async {
+    const storage = FlutterSecureStorage();
+    final token = await storage.read(key: 'token');
+    if (token == null) return;
+    try {
+      int ttlSeconds = 600; // default 10 minutes
 
-  setState(() {
-    userId = user['user_id'].toString();
-    userStatus = user['is_verified'] == true
-        ? UserStatus.verifiedNoReservation
-        : UserStatus.notVerified;
-  });
-}
+      if (closeTimeUnix != null) {
+        final closeTime = DateTime.fromMillisecondsSinceEpoch(closeTimeUnix * 1000);
+        _startCountdown(closeTime);
+        final now = DateTime.now();
+        final diff = closeTime.difference(now).inSeconds;
+        if (diff > 0) {
+          ttlSeconds = diff;
+        }
+      }
+
+      final response = await http.post(
+        Uri.parse('https://foodbridge1.onrender.com/bookings/$bookingId/qr'),
+        headers: {
+          "Authorization": "Bearer $token",
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode({"ttl_seconds": ttlSeconds}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final newToken = data['token'];
+        setState(() {
+          currentQrToken = newToken;
+        });
+        print("QR Token refreshed: $newToken");
+      } else {
+        print("Failed to refresh QR token: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("Error fetching QR token: $e");
+    }
+  }
+
+
+  Future<void> _fetchUserVerificationStatus() async {
+    final user = await VerifiedService.getCurrentUser();
+    if (user == null) return;
+
+    setState(() {
+      userId = user['user_id'].toString();
+      userStatus = user['is_verified'] == true
+          ? UserStatus.verifiedNoReservation
+          : UserStatus.notVerified;
+    });
+  }
+
+  Future<void> _checkExistingBooking() async {
+    const storage = FlutterSecureStorage();
+    final token = await storage.read(key: 'token');
+    if (token == null) return;
+
+    try {
+      final response = await http.get(
+        Uri.parse('https://foodbridge1.onrender.com/bookings?post_id=${widget.postId}'),
+        headers: {
+          "Authorization": "Bearer $token",
+          "Content-Type": "application/json",
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final items = data['items'] as List<dynamic>;
+
+        for (final item in items) {
+          final status = item['status'] as String?;
+          if (status == 'PENDING' || status == 'QUEUED') {
+            final bookingId = item['booking_id'];
+            final qrToken = item['qr_token'];
+
+            setState(() {
+              currentBookingId = bookingId;
+              userStatus = UserStatus.verifiedWithReservation;
+            });
+
+            if (qrToken != null && qrToken.toString().isNotEmpty) {
+              setState(() => currentQrToken = qrToken);
+              print("Found existing QR token: $qrToken");
+            } else {
+              await _fetchQrToken(bookingId,postCloseTimeUnix); // generate new QR if missing
+            }
+            return;
+          }
+        }
+
+        setState(() {
+          userStatus = UserStatus.verifiedNoReservation;
+          currentBookingId = null;
+          currentQrToken = null;
+        });
+      } else {
+        print("Failed to check booking: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("Error checking existing booking: $e");
+    }
+  }
 
   String _formatTimeRange(int? open,  int? close) {
     if (open == null || close == null) return '-';
@@ -295,11 +410,32 @@ class _PostPageState extends State<PostPage> {
                 // Header with food image
                 Stack(
                   children: [
-                    Image.asset(
-                      imagePath, // backend image path
-                      width: double.infinity,
-                      height: 280,
-                      fit: BoxFit.cover,
+                    ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(12),
+                        bottomRight: Radius.circular(12),
+                      ),
+                      child: (imageUrl != null && imageUrl!.isNotEmpty)
+                          ? Image.network(
+                              imageUrl!, // ✅ from backend
+                              width: double.infinity,
+                              height: 280,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Image.asset(
+                                  'assets/images/savory_img.png', // fallback local image
+                                  width: double.infinity,
+                                  height: 280,
+                                  fit: BoxFit.cover,
+                                );
+                              },
+                            )
+                          : Image.asset(
+                              'assets/images/savory_img.png', // fallback when no URL
+                              width: double.infinity,
+                              height: 280,
+                              fit: BoxFit.cover,
+                            ),
                     ),
                     Container(
                       height: 100,
@@ -397,11 +533,11 @@ class _PostPageState extends State<PostPage> {
                                           vertical: 4,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: Color(0xFF038263),
+                                          color:  remainingCount > 0 ? Color(0xFF038263): Colors.red[600],
                                           borderRadius: BorderRadius.circular(4),
                                         ),
                                         child: Text(
-                                          '$availableCount', // backend
+                                          remainingCount > 0 ? '$remainingCount' : 'เต็มแล้ว', // backend
                                           style: TextStyle(
                                             color: Colors.white,
                                             fontWeight: FontWeight.bold,
@@ -599,6 +735,8 @@ class _PostPageState extends State<PostPage> {
                                 ],
                               ),
                             ),
+
+
                           ],
                         ),
                       ),
@@ -644,6 +782,7 @@ class _PostPageState extends State<PostPage> {
 
                       const SizedBox(height: 20),
                       // extra Details section
+
                       Container(
                         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         padding: const EdgeInsets.all(16),
@@ -679,14 +818,18 @@ class _PostPageState extends State<PostPage> {
                           ),
                           childrenPadding: const EdgeInsets.only(top: 12),
                           children: [
-                            Text(
-                              description ?? '', // backend
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: Colors.black87,
-                                height: 1.4,
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                description ?? '',
+                                textAlign: TextAlign.left,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  color: Colors.black87,
+                                  height: 1.4,
+                                ),
                               ),
-                            ),
+                            )
                           ],
                         ),
                       ),
@@ -694,7 +837,7 @@ class _PostPageState extends State<PostPage> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 240), // extra space for bottom overlay
+                const SizedBox(height: 360), // extra space for bottom overlay
               ], 
             ),
           ),
@@ -731,7 +874,7 @@ class _PostPageState extends State<PostPage> {
                       ),
                       const SizedBox(height: 12),
                       QrImageView(
-                        data: reservationId ?? '',
+                        data: currentQrToken ?? '',
                         version: QrVersions.auto,
                         size: 150,
                         backgroundColor: Colors.white,
@@ -749,7 +892,7 @@ class _PostPageState extends State<PostPage> {
                         ),
                       const SizedBox(height: 12),
                       Text(
-                        'รหัสจอง: $reservationId',
+                        'รหัสจอง: $currentQrToken',
                         style: const TextStyle(
                           fontSize: 14,
                           color: Colors.grey,
@@ -926,7 +1069,7 @@ class _PostPageState extends State<PostPage> {
       }
       // else if (future day → allow booking freely)
 
-      // ✅ All checks passed
+      // All checks passed
       return true;
     } catch (e) {
       print("Error validating booking: $e");
@@ -987,6 +1130,7 @@ class _PostPageState extends State<PostPage> {
         final data = jsonDecode(response.body);
         setState(() {
           reservationId = data['token'] ?? 'unknown_token';
+          currentQrToken = reservationId;
         });
         print("QR Token received: $reservationId");
       } else {
@@ -1096,7 +1240,7 @@ class _PostPageState extends State<PostPage> {
                         ),
                       ),
                       const TextSpan(
-                        text: 'กรุณายืนยันตัวตนก่อนแต้มโพสต์',
+                        text: 'กรุณายืนยันตัวตนก่อนรับสิทธิ์',
                       ),
                     ],
                   ),
@@ -1106,18 +1250,24 @@ class _PostPageState extends State<PostPage> {
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
                       Navigator.pop(context);
-                      // Navigate to verification page
+                      // Navigate to VerifyIDPage
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const VerifyIDPage()),
+                      );
                       setState(() {
                         userStatus = UserStatus.verifiedNoReservation;
                       });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('ยืนยันตัวตนสำเร็จ!'),
-                          backgroundColor: Color(0xFF038263),
+                      // mock up update verification status if verified
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('ยืนยันตัวตนสำเร็จ!'),
+                            backgroundColor: Color(0xFF038263),
                         ),
                       );
+                      
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF00897B),

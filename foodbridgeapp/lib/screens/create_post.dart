@@ -5,6 +5,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 //import 'package:intl/intl.dart'
 
 class CreatePostPage extends StatefulWidget {
@@ -38,18 +40,66 @@ class _CreatePostPageState extends State<CreatePostPage> {
   String _district = '';   // e.g., เขตบางรัก
   String _postal = '';     // e.g., 10400
   LatLng? _latLng;         // selected location
+
+  File? _image;
+  String? _uploadedImageUrl;
   
   String formatThaiAddress(Placemark p) {
-  // Safely join components commonly used in TH addresses
-  final parts = [
-    p.street,               // บ้าน/เลขที่ ถนน (sometimes full line)
-    p.subLocality,          // แขวง/ตำบล
-    p.locality,             // เขต/อำเภอ
-  ].where((e) => (e != null && e.trim().isNotEmpty)).toList();
-  // Fallback if street is empty: use name + thoroughfare if available (optional)
-  if (parts.isEmpty) return '${p.name ?? ''} ${p.thoroughfare ?? ''}'.trim();
-  return parts.join(' ');
+    // Safely join components commonly used in TH addresses
+    final parts = [
+      p.street,               // บ้าน/เลขที่ ถนน (sometimes full line)
+      p.subLocality,          // แขวง/ตำบล
+      p.locality,             // เขต/อำเภอ
+    ].where((e) => (e != null && e.trim().isNotEmpty)).toList();
+    // Fallback if street is empty: use name + thoroughfare if available (optional)
+    if (parts.isEmpty) return '${p.name ?? ''} ${p.thoroughfare ?? ''}'.trim();
+    return parts.join(' ');
   }
+
+  Future<void> _pickImage() async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+
+    if (picked == null) return; // user cancelled
+
+    setState(() {
+      _image = File(picked.path);
+    });
+
+    const storage = FlutterSecureStorage();
+    final token = await storage.read(key: 'token');
+
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('https://foodbridge1.onrender.com/me/uploads/images'),
+      )
+        ..headers['Authorization'] = 'Bearer $token'
+        ..files.add(await http.MultipartFile.fromPath('file', picked.path));
+
+      final response = await request.send();
+
+      if (response.statusCode == 200) {
+        final res = await http.Response.fromStream(response);
+        final data = jsonDecode(res.body);
+
+        // Assuming backend returns {"url": "https://..."}
+        setState(() {
+          _uploadedImageUrl = data['url'];
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('อัปโหลดรูปสำเร็จ!')),
+        );
+      } else {
+        throw Exception('Upload failed with ${response.statusCode}');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('อัปโหลดล้มเหลว: $e')),
+      );
+    }
+  }
+
 
   @override
   void initState() {
@@ -95,25 +145,36 @@ class _CreatePostPageState extends State<CreatePostPage> {
               height: 120,
               child: Row(
                 children: [
-                  // Add image button
-                  Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: Colors.grey[300]!,
-                        style: BorderStyle.solid,
-                        width: 2,
+                  GestureDetector(
+                    onTap: _pickImage,
+                    child: Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[300]!, width: 2),
                       ),
-                    ),
-                    child: IconButton(
-                      onPressed: () {},
-                      icon: Icon(
-                        Icons.add,
-                        size: 40,
-                        color: Colors.grey[400],
-                      ),
+                      child: _uploadedImageUrl != null
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.network(
+                                _uploadedImageUrl!,
+                                fit: BoxFit.cover,
+                              ),
+                            )
+                          : _image != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.file(
+                                    _image!,
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                              : Icon(
+                                  Icons.add,
+                                  size: 40,
+                                  color: Colors.grey[400],
+                                ),
                     ),
                   ),
                 ],
@@ -539,7 +600,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                 _latLng = result.latLng;
                                 _addressController.text = formatThaiAddress(result.placemark);
                                 _province = result.placemark.administrativeArea ?? '';
-                                _district = result.placemark.subAdministrativeArea ?? '';
+                                _district = result.placemark.subLocality ?? '';
                                 _postal   = result.placemark.postalCode ?? '';
                               });
                             }
@@ -767,6 +828,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
     print('Address           : ${_addressController.text}');
     print('Details           : ${_detailsController.text}');
     print('Phone             : ${_phoneController.text}');
+    print('image URL        : ${_uploadedImageUrl ?? "not uploaded"}');
     print('LatLng            : ${_latLng != null ? "${_latLng!.latitude}, ${_latLng!.longitude}" : "not selected"}');
     
     // Build request body
@@ -781,10 +843,11 @@ class _CreatePostPageState extends State<CreatePostPage> {
     "close_time": closeTimeDate.toIso8601String(),
     "address": _addressController.text,
     "province": _province,
-    "district": "",
+    "district": _district,
     "phone": _phoneController.text,
     "lat": _latLng!.latitude,     
     "lng": _latLng!.longitude,    
+    "image_url": _uploadedImageUrl ?? '',
     "categories": [_selectedCategory], // only one selected
   };
 
