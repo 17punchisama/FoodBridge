@@ -2,90 +2,235 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:foodbridgeapp/screens/post_page.dart';
 import 'package:foodbridgeapp/screens/create_post.dart';
+// import 'other_profile_page.dart';
+import 'dart:convert';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:foodbridgeapp/verified_service.dart';
+import 'package:geocoding/geocoding.dart';
+import 'dart:async';
 
-class ForYouPage extends StatelessWidget {
-  final List<Map<String, String>> items = [
-    {
-      'image': 'assets/images/item1.png',
-      'title': 'ข้าวกล่องฟรี',
-      'location': 'ลาดพร้าว',
-      'kilo': '2km.',
-      'owner': 'คุณเอ',
-    },
-    {
-      'image': 'assets/images/item1.png',
-      'title': 'ผลไม้สด',
-      'location': 'บางกะปิ',
-      'kilo': '3km.',
-      'owner': 'คุณบี',
-    },
-    {
-      'image': 'assets/images/item1.png',
-      'title': 'น้ำดื่มฟรี',
-      'location': 'รัชดา',
-      'kilo': '1.5km.',
-      'owner': 'คุณซี',
-    },
-    {
-      'image': 'assets/images/item1.png',
-      'title': 'ขนมปังโฮมเมด',
-      'location': 'ห้วยขวาง',
-      'kilo': '2.3km.',
-      'owner': 'คุณดี',
-    },
-    {
-      'image': 'assets/images/item1.png',
-      'title': 'ไข่ต้ม',
-      'location': 'ลาดกระบัง',
-      'kilo': '4km.',
-      'owner': 'คุณอี',
-    },
-  ];
+class ForYouPage extends StatefulWidget {
+  const ForYouPage({super.key});
 
-  final List<Map<String, String>> flashSaleItems = [
-    {
-      'image': 'assets/images/item2.png',
-      'title': 'เค้กช็อกโกแลต',
-      'shop': 'ร้านหวานเย็น',
-      'location': 'ห้วยขวาง',
-      'kilo': '1.5km.',
-      'price': '฿99',
-    },
-    {
-      'image': 'assets/images/item2.png',
-      'title': 'น้ำผลไม้รวม',
-      'shop': 'ร้านสดชื่น',
-      'location': 'รัชดา',
-      'kilo': '2km.',
-      'price': '฿59',
-    },
-    {
-      'image': 'assets/images/item2.png',
-      'title': 'กาแฟเย็น',
-      'shop': 'ร้านกาแฟดี',
-      'location': 'บางกะปิ',
-      'kilo': '2.5km.',
-      'price': '฿49',
-    },
-    {
-      'image': 'assets/images/item2.png',
-      'title': 'ช็อกโกแลตบาร์',
-      'shop': 'ร้านหวานเย็น',
-      'location': 'ลาดพร้าว',
-      'kilo': '3km.',
-      'price': '฿39',
-    },
-    {
-      'image': 'assets/images/item2.png',
-      'title': 'น้ำส้มคั้น',
-      'shop': 'ร้านสดชื่น',
-      'location': 'ห้วยขวาง',
-      'kilo': '1.8km.',
-      'price': '฿29',
-    },
-  ];
+  @override
+  State<ForYouPage> createState() => _ForYouPageState();
+}
 
-  ForYouPage({super.key});
+class _ForYouPageState extends State<ForYouPage> {
+  List<Map<String, String>> allFreePosts = [];
+  bool loadingFreePosts = true;
+  List<Map<String, String>> allSalePosts = [];
+  bool loadingSalePosts = true;
+  final _storage = const FlutterSecureStorage();
+  String? currentProvince;
+  LatLng? _currentUserPosition;
+  // Map<String, dynamic>? userData;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeData();
+  }
+
+  Future<void> _initializeData() async {
+    await _loadUserProvinceAndPosition();
+    await fetchAllFreePosts();
+  }
+
+  Future<void> _loadUserProvinceAndPosition() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return;
+    }
+
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      final placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+      setState(() {
+        currentProvince = placemarks.isNotEmpty
+            ? placemarks.first.administrativeArea ?? "No Where"
+            : "No Where";
+        _currentUserPosition = LatLng(position.latitude, position.longitude);
+      });
+    } catch (e) {
+      debugPrint("Error reverse geocoding: $e");
+      setState(() {
+        currentProvince = "No Where";
+        _currentUserPosition = LatLng(13.7563, 100.5018);
+      });
+    }
+  }
+
+  Future<double?> calculateDistance(double postLat, double postLng) async {
+    if (_currentUserPosition == null) return null;
+
+    final distanceInMeters = Geolocator.distanceBetween(
+      _currentUserPosition!.latitude,
+      _currentUserPosition!.longitude,
+      postLat,
+      postLng,
+    );
+
+    return distanceInMeters / 1000; // km
+  }
+
+  Future<void> fetchAllFreePosts() async {
+    final token = await _storage.read(key: 'token');
+    if (token == null) return;
+
+    final urls = [
+      'https://foodbridge1.onrender.com/posts?status=CLOSED',
+      'https://foodbridge1.onrender.com/posts',
+    ];
+
+    try {
+      List<Map<String, String>> itemFree = [];
+      List<Map<String, String>> itemSale = [];
+      // List<Map<String, String>> mergedPosts = [];
+
+      for (String url in urls) {
+        final response = await http.get(
+          Uri.parse(url),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+
+        if (response.statusCode != 200) continue;
+
+        final data = json.decode(response.body);
+        final List<dynamic> items = data['items'] ?? [];
+
+        final futures = items.map<Future<Map<String, String>>>((item) async {
+          final images = item['images'] ?? [];
+          final imageUrl = (images.isNotEmpty && images.first is String)
+              ? images.first as String
+              : 'https://genconnect.com.sg/cdn/shop/files/Display.jpg?v=1684741232&width=1445';
+
+          final createdAt = item['created_at'];
+          DateTime createdAtDate;
+          if (createdAt is int) {
+            createdAtDate = DateTime.fromMillisecondsSinceEpoch(
+              createdAt * 1000,
+            );
+          } else if (createdAt is String) {
+            createdAtDate = DateTime.tryParse(createdAt) ?? DateTime(0);
+          } else {
+            createdAtDate = DateTime(0);
+          }
+
+          double? lat = item['lat'];
+          double? lng = item['lng'];
+          String kiloText;
+
+          if (lat == null || lng == null) {
+            kiloText = '- km';
+          } else {
+            final distance = await calculateDistance(
+              lat.toDouble(),
+              lng.toDouble(),
+            );
+
+            if (distance == null) {
+              kiloText = 'Null';
+            } else {
+              final clampedDistance = distance > 999 ? 999 : distance;
+              kiloText = distance > 999
+                  ? '999+ km'
+                  : "${clampedDistance.toStringAsFixed(2)} km";
+            }
+          }
+
+          Map<String, dynamic> ownerData = {};
+          final responseUser = await http.get(
+            Uri.parse(
+              'https://foodbridge1.onrender.com/users/${item['provider_id']}',
+            ),
+            headers: {'Authorization': 'Bearer $token'},
+          );
+
+          if (responseUser.statusCode == 200) {
+            ownerData = jsonDecode(responseUser.body);
+          } else {
+            debugPrint('Failed to load user: ${responseUser.statusCode}');
+          }
+
+          String shop;
+          if (item['categories'] == null || item['categories'] == []) {
+            shop = 'No categories';
+          } else {
+            shop = item['categories']?.join(', ');
+          }
+
+          final postMap = {
+            'image': imageUrl.toString(),
+            'title': item['title'].toString(),
+            'location':
+                (item['address'] == null || item['address'].toString().isEmpty)
+                ? 'ไม่ระบุสถานที่'
+                : item['address'].toString(),
+            'kilo': kiloText,
+            'owner': ownerData['full_name'].toString(),
+            'created_at': createdAtDate.toIso8601String(),
+            'shop': shop,
+            'price': "฿${item['price']}",
+          };
+
+          // Separate into free vs sale
+          if ((item['price'] ?? 0) == 0 || item['price'] == null) {
+            itemFree.add(postMap);
+          } else {
+            itemSale.add(postMap);
+          }
+
+          return postMap;
+        }).toList();
+
+        await Future.wait(futures);
+      }
+
+      // Sort both lists newest first
+      itemFree.sort((a, b) {
+        final dateA = DateTime.tryParse(a['created_at'] ?? '') ?? DateTime(0);
+        final dateB = DateTime.tryParse(b['created_at'] ?? '') ?? DateTime(0);
+        return dateB.compareTo(dateA);
+      });
+
+      itemSale.sort((a, b) {
+        final dateA = DateTime.tryParse(a['created_at'] ?? '') ?? DateTime(0);
+        final dateB = DateTime.tryParse(b['created_at'] ?? '') ?? DateTime(0);
+        return dateB.compareTo(dateA);
+      });
+
+      setState(() {
+        allFreePosts = itemFree;
+        allSalePosts = itemSale;
+        loadingFreePosts = false;
+      });
+    } catch (e) {
+      debugPrint("Error fetching posts: $e");
+      setState(() {
+        loadingFreePosts = false;
+        loadingSalePosts = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -101,11 +246,7 @@ class ForYouPage extends StatelessWidget {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(10),
                 boxShadow: const [
-                  BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 10,
-                    offset: Offset(3, 3),
-                  ),
+                  BoxShadow(color: Colors.black12, blurRadius: 10),
                 ],
               ),
               child: TextField(
@@ -121,10 +262,7 @@ class ForYouPage extends StatelessWidget {
                   ),
                   filled: true,
                   fillColor: Colors.transparent,
-                  contentPadding: const EdgeInsets.symmetric(
-                    vertical: 0,
-                    horizontal: 16,
-                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide.none,
@@ -132,154 +270,23 @@ class ForYouPage extends StatelessWidget {
                 ),
               ),
             ),
-
             const SizedBox(height: 24),
 
-            // 🔥 รายการแจกฟรีใกล้ฉัน
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'รายการแจกฟรีใกล้ฉัน',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                ),
-                Container(
-                  width: 25,
-                  height: 25,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF58319),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.arrow_forward_ios,
-                    color: Colors.white,
-                    size: 12,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            SizedBox(
-              height: 150,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: items.length,
-                itemBuilder: (context, index) {
-                  final item = items[index];
-                  return Container(
-                    width: 160,
-                    margin: const EdgeInsets.only(right: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black12,
-                          blurRadius: 8,
-                          spreadRadius: 2,
-                          offset: Offset(0, 0),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ClipRRect(
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(10),
-                            topRight: Radius.circular(10),
-                          ),
-                          child: Image.asset(
-                            item['image']!,
-                            width: 160,
-                            height: 80,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                item['title']!,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              Row(
-                                children: [
-                                  SvgPicture.asset(
-                                    'assets/icons/location.svg',
-                                    width: 12,
-                                    height: 12,
-                                  ),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    item['location']!,
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      color: Color(0xff828282),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Row(
-                                children: [
-                                  SvgPicture.asset(
-                                    'assets/icons/bike.svg',
-                                    width: 10,
-                                    height: 10,
-                                  ),
-                                  const SizedBox(width: 3),
-                                  Text(
-                                    item['kilo']!,
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      color: Color(0xff828282),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 2),
-                                  Padding(
-                                    padding: const EdgeInsets.all(4),
-                                    child: Text(
-                                      '|',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: Color(0xff828282),
-                                      ),
-                                    ),
-                                  ),
-                                  SvgPicture.asset(
-                                    'assets/icons/owner.svg',
-                                    width: 10,
-                                    height: 10,
-                                  ),
-                                  const SizedBox(width: 3),
-                                  Text(
-                                    item['owner']!,
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      color: Color(0xff828282),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+            // Example Section
+            if (loadingFreePosts)
+              const Center(child: CircularProgressIndicator())
+            else
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _HeaderRow(name: 'โพสต์ของฉัน'),
+                  PostPreviewSmall(items: allFreePosts),
+                ],
               ),
-            ),
 
-            // ⚡ Flash Sale
             const SizedBox(height: 20),
+
+            // Flash Sale Section
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -308,9 +315,9 @@ class ForYouPage extends StatelessWidget {
               height: 240,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
-                itemCount: flashSaleItems.length,
+                itemCount: allSalePosts.length,
                 itemBuilder: (context, index) {
-                  final flashItem = flashSaleItems[index];
+                  final flashItem = allSalePosts[index];
                   return Container(
                     width: 160,
                     margin: const EdgeInsets.only(right: 12),
@@ -318,12 +325,7 @@ class ForYouPage extends StatelessWidget {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(10),
                       boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black12,
-                          blurRadius: 8,
-                          spreadRadius: 2,
-                          offset: Offset(0, 0),
-                        ),
+                        BoxShadow(color: Colors.black12, blurRadius: 8),
                       ],
                     ),
                     child: Column(
@@ -334,16 +336,34 @@ class ForYouPage extends StatelessWidget {
                             topLeft: Radius.circular(10),
                             topRight: Radius.circular(10),
                           ),
-                          child: Image.asset(
+                          child: Image.network(
                             flashItem['image']!,
                             width: 160,
                             height: 140,
                             fit: BoxFit.cover,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return const Center(
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) {
+                              return Image.network(
+                                'https://genconnect.com.sg/cdn/shop/files/Display.jpg?v=1684741232&width=1445',
+                                width: 160,
+                                height: 140,
+                                fit: BoxFit.cover,
+                              );
+                            },
                           ),
                         ),
-                        const SizedBox(height: 8),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -369,11 +389,17 @@ class ForYouPage extends StatelessWidget {
                                     height: 12,
                                   ),
                                   const SizedBox(width: 3),
-                                  Text(
-                                    flashItem['location']!,
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      color: Color(0xff828282),
+                                  SizedBox(
+                                    width:
+                                        120, // or whatever width fits your layout
+                                    child: Text(
+                                      flashItem['location']!,
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: Color(0xff828282),
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -412,32 +438,10 @@ class ForYouPage extends StatelessWidget {
                 },
               ),
             ),
-
-            // 📂 หมวดหมู่แนะนำ
-            const SizedBox(height: 24),
-            const Text(
-              'หมวดหมู่แนะนำ',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 12),
-
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                buildCategory('assets/images/savory_img.png', 'ของคาว'),
-                buildCategory('assets/images/dessert_img.png', 'ของหวาน'),
-                buildCategory('assets/images/raw_img.png', 'ของสด'),
-                buildCategory('assets/images/vegetable_img.png', 'ผักสด'),
-              ],
-            ),
-            const SizedBox(height: 80), // กันปุ่มลอยบัง
           ],
         ),
       ),
-
-      // 🟠 ปุ่มลอยมุมขวาล่าง
-      floatingActionButtonLocation:
-          FloatingActionButtonLocation.endFloat, // มุมบนขวา
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.push(
@@ -470,4 +474,211 @@ class ForYouPage extends StatelessWidget {
       ],
     );
   }
+}
+
+class _HeaderRow extends StatelessWidget {
+  final String name;
+
+  const _HeaderRow({required this.name, super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          name,
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+        ),
+        Container(
+          width: 25,
+          height: 25,
+          decoration: const BoxDecoration(
+            color: Color(0xFFF58319),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.arrow_forward_ios,
+            color: Color.fromARGB(255, 244, 243, 243),
+            size: 12,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class PostPreviewSmall extends StatelessWidget {
+  final List<Map<String, String>> items;
+
+  const PostPreviewSmall({super.key, required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        // color: Color.fromARGB(255, 226, 226, 226),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // const SizedBox(height: 12),
+          items.isEmpty
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 30),
+                    child: Text(
+                      "ยังไม่มีโพสต์",
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                )
+              : SizedBox(
+                  height: 150,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: items.length,
+                    itemBuilder: (context, index) {
+                      return _ItemCard(item: items[index]);
+                    },
+                  ),
+                ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ItemCard extends StatelessWidget {
+  final Map<String, String> item;
+
+  const _ItemCard({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          // MaterialPageRoute(builder: (_) => const PostPage(PostId: item['id'])),
+          MaterialPageRoute(builder: (_) => const PostPage()),
+        );
+      },
+      child: Container(
+        width: 160,
+        margin: const EdgeInsets.only(right: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 20,
+              spreadRadius: 0,
+              offset: Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [_buildImage(), const SizedBox(height: 8), _buildDetails()],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImage() => ClipRRect(
+    borderRadius: const BorderRadius.only(
+      topLeft: Radius.circular(10),
+      topRight: Radius.circular(10),
+    ),
+    child: Image.network(
+      item['image']!,
+      width: 160,
+      height: 80,
+      fit: BoxFit.cover,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+      },
+      errorBuilder: (context, error, stackTrace) {
+        return Image.network(
+          'https://genconnect.com.sg/cdn/shop/files/Display.jpg?v=1684741232&width=1445',
+          width: 160,
+          height: 80,
+          fit: BoxFit.cover,
+        );
+      },
+    ),
+  );
+
+  Widget _buildDetails() => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 8),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          item['title']!,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 2),
+        Row(
+          children: [
+            SvgPicture.asset(
+              'assets/icons/location.svg',
+              width: 12,
+              height: 12,
+            ),
+            const SizedBox(width: 2),
+            SizedBox(
+              width: 120, // or whatever width fits your layout
+              child: Text(
+                item['location']!,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                style: const TextStyle(fontSize: 10, color: Colors.black),
+              ),
+            ),
+          ],
+        ),
+        Row(
+          children: [
+            SvgPicture.asset('assets/icons/bike.svg', width: 10, height: 10),
+            const SizedBox(width: 3),
+            Text(
+              item['kilo']!,
+              // double.tryParse(item['kilo']?.replaceAll(' km', '') ?? '0') !=
+              //         null
+              //     ? "${double.parse(item['kilo']!.replaceAll(' km', '')).clamp(0, 999).toStringAsFixed(0)} km"
+              //     : item['kilo']!,
+              style: const TextStyle(fontSize: 10, color: Color(0xff828282)),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 4),
+              child: Text(
+                '|',
+                style: TextStyle(fontSize: 10, color: Color(0xff828282)),
+              ),
+            ),
+            SvgPicture.asset('assets/icons/owner.svg', width: 10, height: 10),
+            const SizedBox(width: 3),
+            Text(
+              item['owner']!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 10, color: Color(0xff828282)),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
 }
