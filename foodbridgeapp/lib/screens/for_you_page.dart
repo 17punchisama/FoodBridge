@@ -71,6 +71,7 @@ class _ForYouPageState extends State<ForYouPage> {
         position.latitude,
         position.longitude,
       );
+      if (!mounted) return;
       setState(() {
         currentProvince = placemarks.isNotEmpty
             ? placemarks.first.administrativeArea ?? "No Where"
@@ -79,6 +80,7 @@ class _ForYouPageState extends State<ForYouPage> {
       });
     } catch (e) {
       debugPrint("Error reverse geocoding: $e");
+      if (!mounted) return;
       setState(() {
         currentProvince = "No Where";
         _currentUserPosition = LatLng(13.7563, 100.5018);
@@ -225,6 +227,7 @@ class _ForYouPageState extends State<ForYouPage> {
         return dateB.compareTo(dateA);
       });
 
+      if (!mounted) return;
       setState(() {
         allFreePosts = itemFree;
         allSalePosts = itemSale;
@@ -232,6 +235,8 @@ class _ForYouPageState extends State<ForYouPage> {
       });
     } catch (e) {
       debugPrint("Error fetching posts: $e");
+
+      if (!mounted) return;
       setState(() {
         loadingFreePosts = false;
         loadingSalePosts = false;
