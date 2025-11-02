@@ -13,6 +13,20 @@ import 'post_page.dart';
 import 'nav_bar.dart';
 import 'profile_page.dart';
 
+String formatKilo(String? kiloText) {
+  if (kiloText == null || kiloText.isEmpty) return '-';
+
+  // strip " km" and try parse
+  final numPart = double.tryParse(kiloText.replaceAll(' km', '').trim());
+  if (numPart == null) return kiloText;
+
+  if (numPart > 999) {
+    return '999+ km';
+  } else {
+    return '${numPart.toStringAsFixed(0)} km';
+  }
+}
+
 class OtherProfilePage extends StatefulWidget {
   final int userId;
   const OtherProfilePage({super.key, required this.userId});
@@ -197,15 +211,20 @@ class _OtherProfilePageState extends State<OtherProfilePage> {
         double? distance;
 
         if (lat == null || lng == null) {
-          kiloText = '-';
+          kiloText = '- km';
         } else {
           final postLat = lat.toDouble();
           final postLng = lng.toDouble();
 
           distance = await calculateDistance(postLat, postLng);
-          kiloText = distance != null
-              ? "${distance.toStringAsFixed(2)} km"
-              : '-';
+          if (distance == null) {
+            kiloText = '- km';
+          } else {
+            final clampedDistance = distance > 999 ? 999 : distance;
+            kiloText = distance > 999
+                ? '999+ km'
+                : "${clampedDistance.toStringAsFixed(2)} km";
+          }
         }
         print("kilitext: $kiloText");
         print("distancekm: $distance");
@@ -214,7 +233,8 @@ class _OtherProfilePageState extends State<OtherProfilePage> {
           // 'id': item['post_id'],
           'image': imageUrl,
           'title': item['title'] ?? 'ไม่ระบุชื่อโพสต์',
-          'location': (item['address'] == null || item['address'].toString().isEmpty)
+          'location':
+              (item['address'] == null || item['address'].toString().isEmpty)
               ? 'ไม่ระบุสถานที่'
               : item['address'],
           'kilo': kiloText,
@@ -545,10 +565,14 @@ class _ItemCard extends StatelessWidget {
               height: 12,
             ),
             const SizedBox(width: 2),
-            Text(
-              item['location']!,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 10, color: Colors.black),
+            SizedBox(
+              width: 120, // or whatever width fits your layout
+              child: Text(
+                item['location']!,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                style: const TextStyle(fontSize: 10, color: Colors.black),
+              ),
             ),
           ],
         ),
@@ -558,6 +582,9 @@ class _ItemCard extends StatelessWidget {
             const SizedBox(width: 3),
             Text(
               item['kilo']!,
+              // double.tryParse(item['kilo']?.replaceAll(' km', '') ?? '0') != null
+              //     ? "${double.parse(item['kilo']!.replaceAll(' km', '')).clamp(0, 999).toStringAsFixed(0)} km"
+              //     : item['kilo']!,
               style: const TextStyle(fontSize: 10, color: Color(0xff828282)),
             ),
             const Padding(
@@ -571,6 +598,8 @@ class _ItemCard extends StatelessWidget {
             const SizedBox(width: 3),
             Text(
               item['owner']!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 10, color: Color(0xff828282)),
             ),
           ],

@@ -303,15 +303,20 @@ class _ProfilePageState extends State<ProfilePage> {
         double? distance;
 
         if (lat == null || lng == null) {
-          kiloText = '-';
+          kiloText = '- km';
         } else {
           final postLat = lat.toDouble();
           final postLng = lng.toDouble();
 
           distance = await calculateDistance(postLat, postLng);
-          kiloText = distance != null
-              ? "${distance.toStringAsFixed(2)} km"
-              : '-';
+          if (distance == null) {
+            kiloText = '- km';
+          } else {
+            final clampedDistance = distance > 999 ? 999 : distance;
+            kiloText = distance > 999
+                ? '999+ km'
+                : "${clampedDistance.toStringAsFixed(2)} km";
+          }
         }
         print("kilitext: $kiloText");
         print("distancekm: $distance");
