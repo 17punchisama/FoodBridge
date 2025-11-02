@@ -552,9 +552,14 @@ class _ItemCard extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          item['title']!,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        SizedBox(
+          width: 140, // or whatever width fits your layout
+          child: Text(
+            item['title']!,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          ),
         ),
         const SizedBox(height: 2),
         Row(
@@ -566,7 +571,7 @@ class _ItemCard extends StatelessWidget {
             ),
             const SizedBox(width: 2),
             SizedBox(
-              width: 120, // or whatever width fits your layout
+              width: 130, // or whatever width fits your layout
               child: Text(
                 item['location']!,
                 overflow: TextOverflow.ellipsis,
