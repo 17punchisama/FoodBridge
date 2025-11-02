@@ -32,6 +32,13 @@ class _ForYouPageState extends State<ForYouPage> {
   LatLng? _currentUserPosition;
   // Map<String, dynamic>? userData;
 
+  final categories_4 = [
+    {'icon': 'assets/images/meal.png', 'label': 'ของคาว'},
+    {'icon': 'assets/images/dessert.png', 'label': 'ของหวาน'},
+    {'icon': 'assets/images/meat.png', 'label': 'เนื้อสด'},
+    {'icon': 'assets/images/veggies.png', 'label': 'ผัก'},
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -438,6 +445,54 @@ class _ForYouPageState extends State<ForYouPage> {
                 },
               ),
             ),
+            const SizedBox(height: 20),
+            Text(
+              "หมวดหมู่แนะนำ",
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: categories_4.map((cat) {
+                return GestureDetector(
+                  onTap: () {
+                    // Navigator.push(
+                    //   context,
+                    //   MaterialPageRoute(
+                    //     builder: (_) => CategoryPage(categoryLabel: cat['label']!),
+                    //   ),
+                    // );
+                  },
+                  child: Column(
+                    children: [
+                      Image.asset(
+                        cat['icon']!, 
+                        width: 50,
+                        height: 50,
+                      ),
+                      // SvgPicture.asset(
+                      //   cat['icon']!,
+                      //   width: 50,
+                      //   height: 50,
+                      // ),
+                      const SizedBox(height: 4),
+                      Text(
+                        cat['label']!,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Color.fromARGB(255, 245, 131, 25),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 20),
           ],
         ),
       ),
