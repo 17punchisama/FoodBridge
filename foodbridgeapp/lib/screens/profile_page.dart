@@ -546,29 +546,30 @@ class _ProfilePageState extends State<ProfilePage> {
 
             const SizedBox(height: 20),
             // 📋 My Posts Section
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'รายการของฉัน',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const HistoryOrderPage(),
-                      ),
-                    );
-                  },
-                  child: const Text(
+            GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const HistoryOrderPage(),
+                  ),
+                );
+              },
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'รายการของฉัน',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
                     'ดูทั้งหมด',
                     style: TextStyle(fontSize: 16, color: Colors.black),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
+
             const SizedBox(height: 12),
             Container(
               width: double.infinity,

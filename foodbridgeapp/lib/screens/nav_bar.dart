@@ -4,8 +4,9 @@ import 'package:foodbridgeapp/screens/notification_page.dart';
 import 'home_page.dart';
 import 'post_page.dart';
 import 'profile_page.dart';
+import 'history_order_page.dart';
 
-class NavBar extends StatelessWidget {
+class NavBar extends StatefulWidget {
   final int currentIndex;
   final bool hasNotification;
 
@@ -16,39 +17,50 @@ class NavBar extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  State<NavBar> createState() => _NavBarState();
+}
+
+class _NavBarState extends State<NavBar> {
+  void _onItemTapped(int index) {
+    if (index == widget.currentIndex) return;
+
+    Widget page;
+    switch (index) {
+      case 0:
+        page = const HomePage();
+        break;
+      case 1:
+        page = const HistoryOrderPage();
+        break;
+      case 2:
+        page = const NotificationPage();
+        break;
+      case 3:
+        page = const ProfilePage();
+        break;
+      default:
+        page = const HomePage();
+    }
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => page),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     const Color activeColor = Color(0xFFF58319);
     const Color inactiveColor = Colors.black;
 
     return BottomNavigationBar(
-      currentIndex: currentIndex,
+      currentIndex: widget.currentIndex,
+      onTap: _onItemTapped,
       selectedItemColor: activeColor,
       unselectedItemColor: inactiveColor,
       type: BottomNavigationBarType.fixed,
-      selectedFontSize: 12, // keep consistent
-      unselectedFontSize: 12, // no text size jump
-      onTap: (index) {
-        Widget page;
-        switch (index) {
-          case 0:
-            page = const HomePage();
-            break;
-          case 1:
-            page = const HomePage();
-          case 2:
-            page = const NotificationPage();
-            break;
-          case 3:
-            page = const ProfilePage();
-            break;
-          default:
-            page = const HomePage();
-        }
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => page),
-        );
-      },
+      selectedFontSize: 12,
+      unselectedFontSize: 12,
       items: [
         BottomNavigationBarItem(
           icon: SvgPicture.asset(
@@ -56,7 +68,7 @@ class NavBar extends StatelessWidget {
             width: 24,
             height: 24,
             colorFilter: ColorFilter.mode(
-              currentIndex == 0 ? activeColor : inactiveColor,
+              widget.currentIndex == 0 ? activeColor : inactiveColor,
               BlendMode.srcIn,
             ),
           ),
@@ -68,7 +80,7 @@ class NavBar extends StatelessWidget {
             width: 24,
             height: 24,
             colorFilter: ColorFilter.mode(
-              currentIndex == 1 ? activeColor : inactiveColor,
+              widget.currentIndex == 1 ? activeColor : inactiveColor,
               BlendMode.srcIn,
             ),
           ),
@@ -82,11 +94,11 @@ class NavBar extends StatelessWidget {
                 width: 24,
                 height: 24,
                 colorFilter: ColorFilter.mode(
-                  currentIndex == 2 ? activeColor : inactiveColor,
+                  widget.currentIndex == 2 ? activeColor : inactiveColor,
                   BlendMode.srcIn,
                 ),
               ),
-              if (hasNotification)
+              if (widget.hasNotification)
                 Positioned(
                   right: 0,
                   top: 0,
@@ -109,7 +121,7 @@ class NavBar extends StatelessWidget {
             width: 24,
             height: 24,
             colorFilter: ColorFilter.mode(
-              currentIndex == 3 ? activeColor : inactiveColor,
+              widget.currentIndex == 3 ? activeColor : inactiveColor,
               BlendMode.srcIn,
             ),
           ),

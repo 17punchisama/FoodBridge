@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'screens/temporary_screen.dart';
+import 'screens/login_page.dart';
 
 void main() {
   runApp(const MyApp());
@@ -16,7 +17,7 @@ class MyApp extends StatelessWidget {
         fontFamily: 'IBMPlexSansThai',
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const TemporaryScreen(), // ใช้หน้าแรกชั่วคราว
+      home: const LoginPage(), // ใช้หน้าแรกชั่วคราว
     );
     //te
   }

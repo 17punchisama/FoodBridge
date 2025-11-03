@@ -213,7 +213,10 @@ class _HistoryOrderPageState extends State<HistoryOrderPage> {
       length: 3,
       child: Scaffold(
         backgroundColor: Colors.white,
-        bottomNavigationBar: NavBar(),
+        bottomNavigationBar: const NavBar(
+          currentIndex: 1,
+          hasNotification: false,
+        ),
         appBar: AppBar(
           backgroundColor: Colors.white,
           elevation: 0,
