@@ -197,7 +197,9 @@ class _ViewMorePageState extends State<ViewMorePage> {
             'kilo': kiloText,
             'owner': ownerData['full_name']?.toString() ?? '-',
             'created_at': createdAtDate.toIso8601String(),
-            'price': "฿${item['price'] ?? '-'}",
+            'price': item['price'] == null
+                ? '฿-'
+                : "฿${item['price'].toString()}",
             'queue': queue,
             'left_queue': leftQueue,
             'isOpen': isOpen.toString(),
@@ -312,6 +314,7 @@ class _ViewMorePageState extends State<ViewMorePage> {
                                 queue: item['queue'] ?? '',
                                 category: item['category'] ?? '',
                                 isOpen: item['isOpen'] == 'true',
+                                price: item['price'] ?? '฿-',
                               );
                             },
                           ),
@@ -333,6 +336,7 @@ class GiveawayCard extends StatelessWidget {
   final String queue;
   final String category;
   final bool isOpen;
+  final String price;
 
   const GiveawayCard({
     super.key,
@@ -345,6 +349,7 @@ class GiveawayCard extends StatelessWidget {
     required this.queue,
     required this.category,
     required this.isOpen,
+    required this.price,
   });
 
   @override
@@ -353,9 +358,7 @@ class GiveawayCard extends StatelessWidget {
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (_) => PostPage(postId: int.parse(id)),
-          ),
+          MaterialPageRoute(builder: (_) => PostPage(postId: int.parse(id))),
         );
       },
       child: Card(
@@ -462,6 +465,15 @@ class GiveawayCard extends StatelessWidget {
                                   color: Colors.white,
                                   fontSize: 12,
                                 ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              price,
+                              style: const TextStyle(
+                                color: Color(0xFFED1429),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ],

@@ -6,8 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-
-// import 'report_page.dart'; // ไว้สร้างทีหลัง
+import 'report_page.dart'; // ไว้สร้างทีหลัง
 
 // (ยังเก็บไว้ เผื่อหน้า report เอาไปใช้)
 const List<Map<String, String>> reportTypeOptions = [
@@ -287,22 +286,46 @@ class _ShowHistoryDetailPageState extends State<ShowHistoryDetailPage> {
     }
   }
 
-  // ไปหน้า report (ตอนนี้ยังไม่มีหน้า → โชว์ snackBar แทน)
-  void _goToReportPage({
-    int? postId,
-    int? bookingId,
-  }) {
-    // Navigator.push(context, MaterialPageRoute(
-    //   builder: (_) => ReportPage(postId: postId, bookingId: bookingId),
-    // ));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'ไปหน้า ReportPage (ยังไม่สร้าง) postId=$postId bookingId=$bookingId',
-        ),
-      ),
-    );
+  
+void _goToReportPage() {
+  // 1) ลองเอาจากโพสต์ที่โหลดมา
+  dynamic rawPostId = _post?['id'] ?? _post?['post_id'];
+
+  // 2) ถ้ายังไม่มี ลองเอาจาก booking (บาง backend ส่งเป็น post_id ใน booking)
+  if (rawPostId == null) {
+    rawPostId = _booking?['post_id'];
   }
+
+  // 3) ถ้ายังไม่มีอีก ลองเอาจากตัวที่ส่งมาตอนเปิดหน้านี้
+  if (rawPostId == null) {
+    rawPostId = widget.postId;
+  }
+
+  // แปลงให้เป็น int
+  int? finalPostId;
+  if (rawPostId is int) {
+    finalPostId = rawPostId;
+  } else if (rawPostId is String) {
+    finalPostId = int.tryParse(rawPostId);
+  }
+
+  if (finalPostId == null) {
+    // กรณีไม่มีจริงๆ
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('ไม่พบโพสต์ที่จะรายงาน')),
+    );
+    return;
+  }
+
+  // 4) ส่งไปหน้า report ด้วย postId ตัวเดียว
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => ReportPage(postId: finalPostId!),
+    ),
+  );
+}
+
 
   // ---------- utils ----------
   String _buildOrderCode({
@@ -1033,10 +1056,7 @@ class _ShowHistoryDetailPageState extends State<ShowHistoryDetailPage> {
                       Expanded(
                         child: _buildSecondaryButton(
                           label: 'รายงานปัญหา',
-                          onTap: () => _goToReportPage(
-                            postId: post?['id'] ?? post?['post_id'],
-                            // bookingId: booking?['id'] ?? booking?['booking_id'],
-                          ),
+                          onTap: _goToReportPage,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -1053,10 +1073,7 @@ class _ShowHistoryDetailPageState extends State<ShowHistoryDetailPage> {
                 } else {
                   return _buildSecondaryButton(
                     label: 'รายงานปัญหา',
-                    onTap: () => _goToReportPage(
-                      postId: post?['id'] ?? post?['post_id'],
-                      bookingId: booking?['id'] ?? booking?['booking_id'],
-                    ),
+                    onTap: _goToReportPage,
                   );
                 }
               },
