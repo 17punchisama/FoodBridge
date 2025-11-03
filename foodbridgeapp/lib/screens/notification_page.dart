@@ -296,7 +296,10 @@ class _NotificationPageState extends State<NotificationPage> {
                     );
                   },
                 ),
-      bottomNavigationBar: const NavBar(),
+      bottomNavigationBar: const NavBar(
+          currentIndex: 2,
+          hasNotification: false,
+        ),
     );
   }
 }
