@@ -4,6 +4,7 @@ import 'package:foodbridgeapp/screens/notification_page.dart';
 import 'home_page.dart';
 import 'post_page.dart';
 import 'profile_page.dart';
+import 'history_order_page.dart';
 
 class NavBar extends StatelessWidget {
   final int currentIndex;
@@ -34,7 +35,7 @@ class NavBar extends StatelessWidget {
             page = const HomePage();
             break;
           case 1:
-            page = const HomePage();
+            page = const HistoryOrderPage();
           case 2:
             page = const NotificationPage();
             break;
