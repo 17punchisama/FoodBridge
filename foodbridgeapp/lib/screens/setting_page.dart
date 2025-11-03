@@ -7,6 +7,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'edit_profile_page.dart';
 import 'change_password_page.dart';
 import 'vertify_id_page.dart';
+import 'login_page.dart'; // 👈 import your login page
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -42,6 +43,17 @@ class _SettingsPageState extends State<SettingsPage> {
     } else {
       print('Failed to load user: ${response.statusCode}');
     }
+  }
+
+  Future<void> _logout() async {
+    await _storage.deleteAll(); // 💥 clear everything
+
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (route) => false, // remove all previous routes
+    );
   }
 
   @override
@@ -82,23 +94,32 @@ class _SettingsPageState extends State<SettingsPage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(displayName,
-                      style: const TextStyle(
-                          fontSize: 24, fontWeight: FontWeight.bold)),
+                  Text(
+                    displayName,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   const SizedBox(width: 5),
                   if (userData?['is_vertify'] == true)
                     const Padding(
                       padding: EdgeInsets.only(left: 6),
-                      child: Icon(Icons.verified, color: Colors.orange, size: 22),
+                      child: Icon(
+                        Icons.verified,
+                        color: Colors.orange,
+                        size: 22,
+                      ),
                     ),
                 ],
               ),
               const SizedBox(height: 30),
               const Align(
                 alignment: Alignment.centerLeft,
-                child: Text('ผู้ใช้งาน',
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                child: Text(
+                  'ผู้ใช้งาน',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
               ),
               const SizedBox(height: 12),
               _settingTile(context, 'แก้ไขโปรไฟล์', onTap: () {
@@ -118,16 +139,18 @@ class _SettingsPageState extends State<SettingsPage> {
               const SizedBox(height: 30),
               const Align(
                 alignment: Alignment.centerLeft,
-                child: Text('การแจ้งเตือน',
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                child: Text(
+                  'การแจ้งเตือน',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
               ),
               const SizedBox(height: 12),
               Card(
                 color: const Color.fromRGBO(237, 236, 236, 1),
                 margin: const EdgeInsets.only(bottom: 10),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: SwitchListTile(
                   value: true,
                   onChanged: (_) {},
@@ -138,8 +161,44 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   activeColor: const Color.fromARGB(255, 245, 131, 25),
                   contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16), // matches ListTile padding
+                      const EdgeInsets.symmetric(horizontal: 16),
                 ),
+              ),
+              const SizedBox(height: 30),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'อื่น ๆ',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _settingTile(
+                context,
+                'ออกจากระบบ',
+                onTap: () async {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('ยืนยันการออกจากระบบ'),
+                      content: const Text('คุณต้องการออกจากระบบหรือไม่?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('ยกเลิก'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('ออกจากระบบ'),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (confirm == true) {
+                    _logout();
+                  }
+                },
               ),
             ],
           ),
@@ -155,8 +214,10 @@ class _SettingsPageState extends State<SettingsPage> {
       margin: const EdgeInsets.only(bottom: 10),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
-        title:
-            Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.normal)),
+        title: Text(
+          title,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.normal),
+        ),
         trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
         onTap: onTap,
       ),
