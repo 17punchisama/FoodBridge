@@ -91,7 +91,7 @@ class _PostPageState extends State<PostPage> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-
+        print('${widget.postId}');
         setState(() {
           status = data['status'] ?? 'เปิดจอง';
           isGiveaway = data['is_giveaway'] ?? false;
@@ -270,8 +270,9 @@ class _PostPageState extends State<PostPage> {
     if (token == null) return;
 
     try {
+      // ✅ filter by post_id and current logged-in user
       final response = await http.get(
-        Uri.parse('https://foodbridge1.onrender.com/bookings?post_id=${widget.postId}'),
+        Uri.parse('https://foodbridge1.onrender.com/bookings?post_id=${widget.postId}&receiver_user_id=$userId'),
         headers: {
           "Authorization": "Bearer $token",
           "Content-Type": "application/json",
@@ -282,32 +283,40 @@ class _PostPageState extends State<PostPage> {
         final data = jsonDecode(response.body);
         final items = data['items'] as List<dynamic>;
 
-        for (final item in items) {
-          final status = item['status'] as String?;
-          if (status == 'PENDING' || status == 'QUEUED') {
-            final bookingId = item['booking_id'];
-            final qrToken = item['qr_token'];
+        // ✅ find the most recent active booking (not cancelled/expired)
+        final activeBooking = items.firstWhere(
+          (item) => item['status'] == 'PENDING' || item['status'] == 'QUEUED',
+          orElse: () => {},
+        );
 
-            setState(() {
-              currentBookingId = bookingId;
-              userStatus = UserStatus.verifiedWithReservation;
-            });
+        if (activeBooking.isNotEmpty) {
+          final bookingId = activeBooking['booking_id'];
+          final qrToken = activeBooking['qr_token'];
+          final expireAt = activeBooking['expire_at'];
 
-            if (qrToken != null && qrToken.toString().isNotEmpty) {
-              setState(() => currentQrToken = qrToken);
-              print("Found existing QR token: $qrToken");
-            } else {
-              await _fetchQrToken(bookingId,postCloseTimeUnix); // generate new QR if missing
-            }
-            return;
+          setState(() {
+            currentBookingId = bookingId;
+            userStatus = UserStatus.verifiedWithReservation;
+            currentQrToken = qrToken;
+          });
+
+          // ✅ Restore countdown if expire_at is known
+          if (expireAt != null) {
+            final closeTime = DateTime.tryParse(expireAt);
+            if (closeTime != null) _startCountdown(closeTime);
           }
-        }
 
-        setState(() {
-          userStatus = UserStatus.verifiedNoReservation;
-          currentBookingId = null;
-          currentQrToken = null;
-        });
+          print("✅ Restored booking ID: $bookingId");
+          print("✅ Restored QR token: $qrToken");
+        } else {
+          // no active booking found
+          setState(() {
+            userStatus = UserStatus.verifiedNoReservation;
+            currentBookingId = null;
+            currentQrToken = null;
+          });
+          print("ℹ No active booking found for user $userId");
+        }
       } else {
         print("Failed to check booking: ${response.statusCode}");
       }
@@ -315,7 +324,7 @@ class _PostPageState extends State<PostPage> {
       print("Error checking existing booking: $e");
     }
   }
-
+  
   String _formatTimeRange(int? open,  int? close) {
     if (open == null || close == null) return '-';
 
@@ -989,7 +998,7 @@ class _PostPageState extends State<PostPage> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: () => _handleReservationAction(context),
+                  onPressed: () => _handleReservationAction(context), // reservation action
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF038263),
                     shape: RoundedRectangleBorder(

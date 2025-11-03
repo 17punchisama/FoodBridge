@@ -231,7 +231,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                         }
                       });
                     },
-                    activeColor: Colors.green[600],
+                    activeColor: Color(0xFF038263),
                   ),
                 ],
               ),
@@ -273,7 +273,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                   controller: _pricecontroller,
                                   keyboardType: TextInputType.number,
                                   textAlign: TextAlign.center,
-                                  onSubmitted: (value) {
+                                  onChanged: (value) {
                                     setState(() {
                                       _price = int.tryParse(value) ?? 0;
                                       _pricecontroller.text = _price.toString();
@@ -440,7 +440,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                   // Date picker row + Time pickers
                   Row(
                     children: [
-                      Icon(Icons.date_range, color: Colors.green[600], size: 20),
+                      Icon(Icons.date_range, color: Color(0xFF038263), size: 20),
                       const SizedBox(width: 8),
                       const Padding(
                       padding: EdgeInsets.symmetric(vertical: 4.0), 
@@ -489,7 +489,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                   ),
                   Row(
                     children: [
-                      Icon(Icons.access_time,color: Colors.green[600],size: 20,),
+                      Icon(Icons.access_time,color: Color(0xFF038263),size: 20,),
                       const SizedBox(width: 8),
                       const Padding(
                       padding: EdgeInsets.symmetric(vertical: 4.0), 
@@ -702,17 +702,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
       // Bottom post button
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.2),
-              spreadRadius: 1,
-              blurRadius: 4,
-              offset: const Offset(0, -2),
-            ),
-          ],
-        ),
         child: SizedBox(
           width: double.infinity,
           height: 50,
@@ -722,7 +711,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
               _createPost();
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green[600],
+              backgroundColor: Color(0xFF038263),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(25),
               ),
@@ -752,7 +741,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.green[600] : Colors.grey[200],
+          color: isSelected ? Color(0xFF038263) : Colors.grey[200],
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
@@ -847,7 +836,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
     "phone": _phoneController.text,
     "lat": _latLng!.latitude,     
     "lng": _latLng!.longitude,    
-    "image_url": _uploadedImageUrl ?? '',
+    "images": [_uploadedImageUrl],
     "categories": [_selectedCategory], // only one selected
   };
 
@@ -868,7 +857,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('โพสต์สำเร็จแล้ว!'),
-          backgroundColor: Colors.green,
+          backgroundColor: Color(0xFF038263),
         ),
       );
       Future.delayed(const Duration(seconds: 1), () {
