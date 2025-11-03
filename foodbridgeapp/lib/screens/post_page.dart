@@ -432,6 +432,8 @@ class _PostPageState extends State<PostPage> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isOwner = providerId != null && userId == providerId.toString();
+
     return Scaffold(
       extendBody: true, // To allow bottom button to float over content
       body: Stack(
@@ -902,91 +904,161 @@ class _PostPageState extends State<PostPage> {
               ], 
             ),
           ),
-        // Floating QR section (only when reserved)
-        if (userStatus == UserStatus.verifiedWithReservation)
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 16,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      const Text(
-                        'แสดง QR CODE เพื่อยืนยันการจอง',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      QrImageView(
-                        data: currentQrToken ?? '',
-                        version: QrVersions.auto,
-                        size: 150,
-                        backgroundColor: Colors.white,
-                      ),
-                      const SizedBox(height: 12),
-                      if (_timeRemaining != null)
-                        Text(
-                          _timeRemaining!.inSeconds > 0
-                            ? "QR หมดอายุใน ${_formatDuration(_timeRemaining!)}"
-                            : "QR หมดอายุแล้ว",
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.red,
-                          ),
-                        ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'รหัสจอง: $currentQrToken',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: () => _handleReservationAction(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red[600],
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(25),
-                      ),
+          // Bottom overlay for QR code and countdown       
+// Floating section (QR or Scan button)
+
+
+if (userStatus == UserStatus.verifiedWithReservation || isOwner)
+  Positioned(
+    left: 16,
+    right: 16,
+    bottom: 16,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Owner Mode → Scan QR
+        if (isOwner)
+          Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
                     ),
-                    child: const Text(
-                      'ยกเลิกการจอง',
+                  ],
+                ),
+                child: const Column(
+                  children: [
+                    Text(
+                      'สำหรับเจ้าของโพสต์',
                       style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
+                        fontSize: 16,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                    SizedBox(height: 8),
+                    Text(
+                      'สแกน QR Code ของผู้รับเพื่อตรวจสอบสิทธิ์',
+                      style: TextStyle(fontSize: 14, color: Colors.grey),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: _openQrScanner,
+                  icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
+                  label: const Text(
+                    'สแกน QR Code',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFF038263),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(25),
+                    ),
                   ),
                 ),
-              ],
-            ),
-          ),          
+              ),
+            ],
+          )
+        else
+          // Receiver Mode → show QR and cancel
+          Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    const Text(
+                      'แสดง QR CODE เพื่อยืนยันการจอง',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    QrImageView(
+                      data: currentQrToken ?? '',
+                      version: QrVersions.auto,
+                      size: 150,
+                      backgroundColor: Colors.white,
+                    ),
+                    const SizedBox(height: 12),
+                    if (_timeRemaining != null)
+                      Text(
+                        _timeRemaining!.inSeconds > 0
+                            ? "QR หมดอายุใน ${_formatDuration(_timeRemaining!)}"
+                            : "QR หมดอายุแล้ว",
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.red,
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'รหัสจอง: $currentQrToken',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: () => _handleReservationAction(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red[600],
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(25),
+                    ),
+                  ),
+                  child: const Text(
+                    'ยกเลิกการจอง',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+      ],
+    ),
+  ),
+
         ], 
       ),
 
@@ -1018,6 +1090,13 @@ class _PostPageState extends State<PostPage> {
             )
           : null,
     );
+  }
+
+  void _openQrScanner() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('เปิดหน้าสแกน QR Code (demo mode)')),
+    );
+    // TODO: push to scanner page here later
   }
 
   //  method to validate booking conditions
