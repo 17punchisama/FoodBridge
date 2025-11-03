@@ -9,6 +9,7 @@ import 'other_profile_page.dart';
 import 'setting_page.dart';
 import 'history_order_page.dart';
 import 'view_more_page.dart';
+import 'booking_qr_scan_page.dart';
 
 class TemporaryScreen extends StatelessWidget {
   const TemporaryScreen({super.key});
@@ -96,6 +97,15 @@ class TemporaryScreen extends StatelessWidget {
                 );
               },
               child: const Text('History Order'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => BookingQRScanPage()),
+                );
+              },
+              child: const Text('Scan'),
             ),
             ElevatedButton(
               onPressed: () {
