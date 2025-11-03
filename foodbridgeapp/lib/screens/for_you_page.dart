@@ -133,6 +133,19 @@ class _ForYouPageState extends State<ForYouPage> {
           cat = (item['categories'] as List).join(', ');
         }
 
+        Map<String, dynamic> ownerData = {};
+        final responseUser = await http.get(
+          Uri.parse(
+            'https://foodbridge1.onrender.com/users/${item['provider_id']}',
+          ),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+        if (responseUser.statusCode == 200) {
+            ownerData = jsonDecode(responseUser.body);
+          } else {
+            debugPrint('Failed to load user: ${responseUser.statusCode}');
+          }
+
         final map = <String, dynamic>{
           'id': item['post_id'].toString(),
           'image': imageUrl,
@@ -142,8 +155,7 @@ class _ForYouPageState extends State<ForYouPage> {
               ? 'ไม่ระบุสถานที่'
               : item['address'].toString(),
           'kilo': kiloText,
-          // ไม่ดึง user เพื่อให้เร็ว
-          'owner': '-',
+          'owner': ownerData['full_name'] ?? "Unknown",
           'created_at': createdAt.toIso8601String(),
           'shop': cat,
           'price': item['price'] == null
@@ -630,6 +642,21 @@ class _ItemCard extends StatelessWidget {
                         item['kilo']?.toString() ?? '- km',
                         style: const TextStyle(
                             fontSize: 10, color: Color(0xff828282)),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4),
+                        child: Text(
+                          '|',
+                          style: TextStyle(fontSize: 10, color: Color(0xff828282)),
+                        ),
+                      ),
+                      SvgPicture.asset('assets/icons/owner.svg', width: 10, height: 10),
+                      const SizedBox(width: 3),
+                      Text(
+                        item['owner']!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 10, color: Color(0xff828282)),
                       ),
                     ],
                   ),
