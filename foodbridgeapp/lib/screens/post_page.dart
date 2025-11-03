@@ -11,6 +11,7 @@ import 'package:http/http.dart' as http;
 import 'package:foodbridgeapp/verified_service.dart';
 import 'package:foodbridgeapp/screens/vertify_id_page.dart';
 import 'package:foodbridgeapp/screens/other_profile_page.dart';
+import 'package:foodbridgeapp/screens/booking_qr_scan_page.dart';
 
 
 // Enum to track user verification and reservation status
@@ -933,7 +934,7 @@ if (userStatus == UserStatus.verifiedWithReservation || isOwner)
                     ),
                   ],
                 ),
-                child: const Column(
+                child: Column(
                   children: [
                     Text(
                       'สำหรับเจ้าของโพสต์',
@@ -942,20 +943,7 @@ if (userStatus == UserStatus.verifiedWithReservation || isOwner)
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    SizedBox(height: 8),
-                    Text(
-                      'สแกน QR Code ของผู้รับเพื่อตรวจสอบสิทธิ์',
-                      style: TextStyle(fontSize: 14, color: Colors.grey),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton.icon(
+                    ElevatedButton.icon(
                   onPressed: _openQrScanner,
                   icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
                   label: const Text(
@@ -973,7 +961,17 @@ if (userStatus == UserStatus.verifiedWithReservation || isOwner)
                     ),
                   ),
                 ),
+                    SizedBox(height: 8),
+                    Text(
+                      'สแกน QR Code ของผู้รับเพื่อตรวจสอบสิทธิ์',
+                      style: TextStyle(fontSize: 14, color: Colors.grey),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(height: 64),
+              
             ],
           )
         else
@@ -1093,10 +1091,10 @@ if (userStatus == UserStatus.verifiedWithReservation || isOwner)
   }
 
   void _openQrScanner() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('เปิดหน้าสแกน QR Code (demo mode)')),
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const BookingQRScanPage()),
     );
-    // TODO: push to scanner page here later
   }
 
   //  method to validate booking conditions
