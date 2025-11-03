@@ -91,7 +91,7 @@ class _PostPageState extends State<PostPage> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-
+        print('${widget.postId}');
         setState(() {
           status = data['status'] ?? 'เปิดจอง';
           isGiveaway = data['is_giveaway'] ?? false;
@@ -989,7 +989,7 @@ class _PostPageState extends State<PostPage> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: () => _handleReservationAction(context),
+                  onPressed: () => _handleReservationAction(context), // reservation action
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF038263),
                     shape: RoundedRectangleBorder(

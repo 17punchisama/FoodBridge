@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class MapPickerResult {
   final LatLng latLng;
@@ -37,36 +40,66 @@ class _MapPickerPageState extends State<MapPickerPage> {
       _marker = Marker(markerId: const MarkerId('picked'), position: _picked);
     }
   }
-
+  
   Future<void> _searchPlace() async {
     final query = _searchController.text.trim();
     if (query.isEmpty) return;
-    setState(() => _searching = true);
+
+    const apiKey = 'AIzaSyC4dBWyUoZKWYYMSdRgtaXIxRE_rMu8GSM'; // Replace with your Google Places API key
+
     try {
-      final locations = await locationFromAddress(query, localeIdentifier: 'th_TH');
-      if (locations.isNotEmpty) {
-        final loc = locations.first;
-        final pos = LatLng(loc.latitude, loc.longitude);
-        setState(() {
-          _picked = pos;
-          _marker = Marker(markerId: const MarkerId('picked'), position: pos);
-        });
-        await _controller?.animateCamera(CameraUpdate.newLatLngZoom(pos, 15));
+      // Get current user location
+      final position = await Geolocator.getCurrentPosition();
+
+      final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/place/textsearch/json'
+        '?query=${Uri.encodeComponent(query)}'
+        '&location=${position.latitude},${position.longitude}'
+        '&radius=3000'
+        '&language=th'
+        '&key=$apiKey',
+      );
+
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['results'] != null && data['results'].isNotEmpty) {
+          final place = data['results'][0];
+          final lat = place['geometry']['location']['lat'];
+          final lng = place['geometry']['location']['lng'];
+          final name = place['name'];
+
+          setState(() {
+            _picked = LatLng(lat, lng);
+            _marker = Marker(
+              markerId: const MarkerId('picked'),
+              position: LatLng(lat, lng),
+              infoWindow: InfoWindow(title: name),
+            );
+          });
+
+          await _controller?.animateCamera(CameraUpdate.newLatLngZoom(_picked!, 15));
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('ไม่พบสถานที่ที่ค้นหา')),
+          );
+        }
       } else {
-        if (!mounted) return;
+        print('Google API error: ${response.body}');
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ไม่พบสถานที่ที่ค้นหา')),
+          SnackBar(content: Text('ข้อผิดพลาดจาก Google API: ${response.statusCode}')),
         );
       }
     } catch (e) {
-      if (!mounted) return;
+      print('Error searching place: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('เกิดข้อผิดพลาดในการค้นหา: $e')),
       );
-    } finally {
-      if (mounted) setState(() => _searching = false);
     }
   }
+
+
+  
 
   Future<void> _confirm() async {
     setState(() => _confirming = true);
@@ -151,7 +184,7 @@ class _MapPickerPageState extends State<MapPickerPage> {
             ? const Text('กำลังยืนยัน...')
             : const Text('ยืนยันตำแหน่ง'),
         icon: const Icon(Icons.check),
-        backgroundColor: Colors.green[600],
+        backgroundColor: Color(0xFF038263),
         foregroundColor: Colors.white,
       ),
     );
