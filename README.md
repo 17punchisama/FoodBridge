@@ -39,29 +39,33 @@ The application integrates location-based features, real-time availability track
 
 ## 📱 Application Screens (Selected)
 
+### 🏠 Home Page
+
+![Identity Verification](screenshots/home_page.png)
+
 ### 🔐 Identity Verification & Profile
 
-::contentReference[oaicite:0]{index=0}
+![Identity Verification](screenshots/identity.png)
 
 
 ### 📍 Location & Map Integration
 
-::contentReference[oaicite:1]{index=1}
+![Identity Verification](screenshots/map.png)
 
 
 ### 📝 Create Food Post
 
-::contentReference[oaicite:2]{index=2}
+![Create Food Post](screenshots/create_post.png)
 
 
-### 📰 Community & Food Detail
+### 📰 Food Detail
 
-::contentReference[oaicite:3]{index=3}
+![Food Detail](screenshots/food_detail.png)
 
 
 ### 👤 User Profile & Activity
 
-::contentReference[oaicite:4]{index=4}
+![Food Detail](screenshots/profile.png)
 
 
 ---
@@ -104,3 +108,4 @@ Feel free to open issues or submit pull requests for improvements or new feature
 ## 🔗 Links
 
 - GitHub Repository: https://github.com/17punchisama/FoodBridge
+
